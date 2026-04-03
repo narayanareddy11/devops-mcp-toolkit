@@ -1,0 +1,49 @@
+{
+  "mcpServers": {
+    "docker-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/01_docker_manager.py"],
+      "env": {}
+    },
+    "terraform-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/02_terraform_manager.py"],
+      "env": {}
+    },
+    "sonarqube-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/03_sonarqube_manager.py"],
+      "env": {
+        "SONAR_URL": "http://localhost:30900",
+        "SONAR_USER": "admin",
+        "SONAR_PASS": "Aa75696462461@"
+      }
+    },
+    "jenkins-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/04_jenkins_manager.py"],
+      "env": {
+        "JENKINS_URL": "http://localhost:30080",
+        "JENKINS_USER": "admin",
+        "JENKINS_PASS": "admin"
+      }
+    },
+    "devops-dashboard": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/05_devops_dashboard.py"],
+      "env": {
+        "JENKINS_URL": "http://localhost:30080",
+        "JENKINS_USER": "admin",
+        "JENKINS_PASS": "admin",
+        "SONAR_URL": "http://localhost:30900",
+        "SONAR_USER": "admin",
+        "SONAR_PASS": "Aa75696462461@"
+      }
+    },
+    "kubernetes-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/06_kubernetes_manager.py"],
+      "env": {}
+    }
+  }
+}
