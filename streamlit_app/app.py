@@ -28,7 +28,7 @@ from utils import (
 
 PROM_URL    = "http://localhost:30090"
 GRAFANA_URL = "http://localhost:30030"
-GRAFANA_AUTH = ("admin", "admin1234@")
+GRAFANA_AUTH = ("admin", "admin@123456789@")
 ARGOCD_URL  = "http://localhost:30085"
 
 # ── Page config ────────────────────────────────────────────────────────────────
