@@ -122,6 +122,13 @@ Each tool runs natively in Kubernetes and is accessible from your browser.
 
 ---
 
+### Loki — Log Aggregation
+> `http://localhost:30310` &nbsp;·&nbsp; no auth &nbsp;·&nbsp; Query via Grafana Explore
+
+![Loki via Grafana](docs/screenshots/tool_loki.png)
+
+---
+
 ## MCP Servers — 185+ Tools
 
 | # | Server | MCP Name | Tools | Controls |
