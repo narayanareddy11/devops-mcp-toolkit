@@ -25,6 +25,14 @@ def shell(cmd: str, cwd: str = None, extra_env: dict = None) -> dict:
     return {"out": result.stdout.strip(), "err": result.stderr.strip(), "ok": result.returncode == 0}
 
 
+def shell_lines(cmd: str, cwd: str = None, extra_env: dict = None) -> list[str]:
+    """Run a shell command and return a list of non-empty lines from stdout."""
+    r = shell(cmd, cwd=cwd, extra_env=extra_env)
+    if r["ok"] and r["out"]:
+        return [line for line in r["out"].splitlines() if line.strip()]
+    return []
+
+
 def docker(args: str) -> dict:
     return shell(f"docker {args}")
 

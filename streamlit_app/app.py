@@ -210,6 +210,7 @@ with st.sidebar:
     if "active_page" not in st.session_state:
         st.session_state["active_page"] = "🏠 Dashboard"
 
+    # ── Page navigation ──────────────────────────────────────────────────────────
     st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.5rem 0 0.3rem 0;">Overview</p>', unsafe_allow_html=True)
     st.radio("Overview", ["🏠 Dashboard"], key="nav_overview",
              label_visibility="collapsed", on_change=_nav, args=("nav_overview",))
@@ -242,25 +243,63 @@ with st.sidebar:
 
     st.divider()
 
-    # Live service status dots
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 0.5rem 0;">Service Status</p>', unsafe_allow_html=True)
-    _svc_ports = [
-        ("Jenkins", 30080), ("SonarQube", 30900), ("Prometheus", 30090),
-        ("Grafana", 30030), ("ArgoCD", 30085), ("Vault", 30200),
-        ("Loki", 30310), ("MinIO", 30920), ("Nexus", 30081),
+    # ── Live service status + URL links ──────────────────────────────────────────
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 0.4rem 0;">🔌 MCP Tools & Services</p>', unsafe_allow_html=True)
+
+    _SERVICES = [
+        # (icon, name, port, url, host)
+        ("⚙️", "Jenkins",            30080, "http://localhost:30080",  "localhost"),
+        ("🔍", "SonarQube",          30900, "http://localhost:30900",  "localhost"),
+        ("📊", "Prometheus",         30090, "http://localhost:30090",  "localhost"),
+        ("📈", "Grafana",            30030, "http://localhost:30030",  "localhost"),
+        ("🔀", "ArgoCD",             30085, "https://localhost:30085", "localhost"),
+        ("🔐", "Vault",              30200, "http://localhost:30200",  "localhost"),
+        ("📜", "Loki",               30310, "http://localhost:30310",  "localhost"),
+        ("📦", "Container Registry", 30880, "http://localhost:30881",  "127.0.0.1"),
+        ("🗄️", "MinIO Console",      30921, "http://localhost:30921",  "localhost"),
+        ("🏛️", "Nexus",             30081, "http://localhost:30081",  "localhost"),
+        ("☸️", "Kubernetes",         0,     "",                        ""),
+        ("🐳", "Docker",             0,     "",                        ""),
+        ("🌍", "Terraform",          0,     "",                        ""),
+        ("🛡️", "Trivy",              0,     "",                        ""),
+        ("⛵", "Helm",               0,     "",                        ""),
     ]
-    _dot_rows = ""
-    for _svc, _port in _svc_ports:
-        _up = port_up(_port)
-        _dot = "dot-up" if _up else "dot-down"
-        _dot_rows += f'<div style="padding:1px 0;font-size:0.8rem;"><span class="{_dot}"></span>{_svc}</div>'
-    st.markdown(_dot_rows, unsafe_allow_html=True)
+
+    _svc_html = ""
+    for _ico, _name, _port, _url, _host in _SERVICES:
+        if _port > 0:
+            _up = port_up(_port, host=_host if _host else "localhost")
+            _dot_cls = "dot-up" if _up else "dot-down"
+            _status = "UP" if _up else "DOWN"
+            _status_color = "#4caf50" if _up else "#f44336"
+            if _url:
+                _link = f'<a href="{_url}" target="_blank" style="color:#90caf9;text-decoration:none;font-size:0.72rem;">{_url.replace("http://","").replace("https://","")}</a>'
+            else:
+                _link = ""
+        else:
+            _dot_cls = "dot-up"
+            _status = "CLI"
+            _status_color = "#78909c"
+            _link = ""
+
+        _svc_html += f"""
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    padding:3px 6px;margin:2px 0;border-radius:6px;
+                    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);">
+          <div style="display:flex;align-items:center;gap:5px;overflow:hidden;">
+            <span class="{_dot_cls}" style="flex-shrink:0;"></span>
+            <span style="font-size:0.82rem;color:#cfd8dc;white-space:nowrap;">{_ico} {_name}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
+            <span style="font-size:0.65rem;font-weight:bold;color:{_status_color};">{_status}</span>
+            {f'<span style="font-size:0.62rem;">{_link}</span>' if _link else ""}
+          </div>
+        </div>"""
+
+    st.markdown(_svc_html, unsafe_allow_html=True)
 
     st.divider()
     auto_refresh = st.toggle("⟳ Auto-refresh (30s)", value=False)
-    if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.logged_in = False
-        st.rerun()
 
 if auto_refresh:
     time.sleep(30)
