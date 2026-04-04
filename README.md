@@ -7,6 +7,7 @@
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-Docker%20Desktop-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blueviolet)](https://modelcontextprotocol.io)
 [![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-narayanareddy99910-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/u/narayanareddy99910)
 
 ---
 
@@ -160,6 +161,32 @@ Each tool runs natively in Kubernetes and is accessible from your browser.
 | Registry UI | http://localhost:30881 | — | no auth |
 | Loki | http://localhost:30310 | — | no auth |
 | PostgreSQL (internal) | ClusterIP only | sonar | sonar |
+
+---
+
+## Docker Hub Images
+
+All images are published at **[hub.docker.com/u/narayanareddy99910](https://hub.docker.com/u/narayanareddy99910)**
+
+```bash
+# Pull the Streamlit + MCP servers app
+docker pull narayanareddy99910/devops-mcp-toolkit:latest
+
+# Or pull individual tool images
+docker pull narayanareddy99910/jenkins:lts
+docker pull narayanareddy99910/sonarqube:community
+docker pull narayanareddy99910/grafana:latest
+docker pull narayanareddy99910/prometheus:latest
+docker pull narayanareddy99910/argocd:v3.3.6
+docker pull narayanareddy99910/vault:1.17
+docker pull narayanareddy99910/loki:3.0.0
+docker pull narayanareddy99910/promtail:3.0.0
+docker pull narayanareddy99910/minio:latest
+docker pull narayanareddy99910/nexus3:latest
+docker pull narayanareddy99910/registry:2
+docker pull narayanareddy99910/docker-registry-ui:latest
+docker pull narayanareddy99910/postgres:15
+```
 
 ---
 
