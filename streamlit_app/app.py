@@ -1,6 +1,6 @@
 """
 DevOps MCP Toolkit — Streamlit Control Panel
-Visual interface for all 9 MCP servers.
+Visual interface for all 15 MCP servers.
 Run: streamlit run streamlit_app/app.py
 """
 
@@ -28,8 +28,17 @@ from utils import (
 
 PROM_URL    = "http://localhost:30090"
 GRAFANA_URL = "http://localhost:30030"
-GRAFANA_AUTH = ("admin", "admin@123456789@")
-ARGOCD_URL  = "http://localhost:30085"
+GRAFANA_AUTH = ("admin", "Admin@123456789@")
+ARGOCD_URL  = "https://localhost:30085"
+VAULT_URL   = "http://localhost:30200"
+VAULT_TOKEN = "root"
+LOKI_URL    = "http://localhost:30310"
+REGISTRY_URL = "http://127.0.0.1:30880"
+REGISTRY_UI_URL = "http://127.0.0.1:30881"
+MINIO_URL   = "http://localhost:30920"
+MINIO_CONSOLE_URL = "http://localhost:30921"
+NEXUS_URL   = "http://localhost:30081"
+NEXUS_AUTH  = ("admin", "Admin@123456789@")
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -55,16 +64,27 @@ page = st.sidebar.radio(
         "📊 Prometheus & Grafana",
         "🔀 ArgoCD",
         "🛡️ Trivy Scanner",
+        "⛵ Helm Manager",
+        "🔐 Vault Secrets",
+        "📜 Loki Logs",
+        "📦 Container Registry",
+        "🗄️ MinIO Storage",
+        "🏛️ Nexus Repository",
     ],
 )
 
 st.sidebar.divider()
-st.sidebar.markdown("**Services**")
-st.sidebar.markdown(f"Jenkins → [localhost:30080]({JENKINS_URL})")
-st.sidebar.markdown(f"SonarQube → [localhost:30900]({SONAR_URL})")
-st.sidebar.markdown(f"Prometheus → [localhost:30090]({PROM_URL})")
-st.sidebar.markdown(f"Grafana → [localhost:30030]({GRAFANA_URL})")
-st.sidebar.markdown(f"ArgoCD → [localhost:30085]({ARGOCD_URL})")
+st.sidebar.markdown("**🔧 Core Services**")
+st.sidebar.markdown(f"[🔧 Jenkins](http://localhost:30080) · [🔍 SonarQube](http://localhost:30900)")
+st.sidebar.markdown(f"[📊 Grafana](http://localhost:30030) · [📈 Prometheus](http://localhost:30090)")
+st.sidebar.markdown(f"[🔀 ArgoCD](https://localhost:30085)")
+st.sidebar.divider()
+st.sidebar.markdown("**🆕 New Services**")
+st.sidebar.markdown(f"[🔐 Vault](http://localhost:30200) · [📜 Loki](http://localhost:30310)")
+st.sidebar.markdown(f"[📦 Registry](http://127.0.0.1:30881) · [🗄️ MinIO](http://localhost:30921)")
+st.sidebar.markdown(f"[🏛️ Nexus](http://localhost:30081)")
+st.sidebar.divider()
+st.sidebar.caption("admin / Admin@123456789@")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — DASHBOARD
@@ -92,35 +112,62 @@ if page == "🏠 Dashboard":
     col5.metric("Terraform",  health["terraform"]["version"],     delta=status_icon(health["terraform"]["up"]))
 
     # Status cards — row 2: observability + GitOps
-    import httpx as _hx
-    def _port_up(port):
-        import socket; s = socket.socket(); s.settimeout(2)
-        ok = s.connect_ex(("localhost", port)) == 0; s.close(); return ok
+    def _port_up(port, ipv4=False):
+        import socket
+        host = "127.0.0.1" if ipv4 else "localhost"
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)
+        ok = s.connect_ex((host, port)) == 0
+        s.close()
+        return ok
 
-    col6, col7, col8, col9 = st.columns(4)
-    prom_up = _port_up(30090)
-    col6.metric("Prometheus", "localhost:30090", delta=status_icon(prom_up))
-    graf_up = _port_up(30030)
-    col7.metric("Grafana", "localhost:30030", delta=status_icon(graf_up))
-    argo_up = _port_up(30085)
-    col8.metric("ArgoCD", "localhost:30085", delta=status_icon(argo_up))
     import shutil as _sh
+    col6, col7, col8, col9 = st.columns(4)
+    prom_up  = _port_up(30090)
+    col6.metric("Prometheus", ":30090", delta=status_icon(prom_up))
+    graf_up  = _port_up(30030)
+    col7.metric("Grafana", ":30030", delta=status_icon(graf_up))
+    argo_up  = _port_up(30085)
+    col8.metric("ArgoCD", ":30085", delta=status_icon(argo_up))
     trivy_ok = bool(_sh.which("trivy"))
-    col9.metric("Trivy", "installed" if trivy_ok else "not installed", delta=status_icon(trivy_ok))
+    col9.metric("Trivy", "installed" if trivy_ok else "missing", delta=status_icon(trivy_ok))
+
+    # Row 3: new services
+    st.divider()
+    st.subheader("🆕 New Services")
+    col10, col11, col12, col13, col14, col15 = st.columns(6)
+    vault_up   = _port_up(30200)
+    col10.metric("Vault",    ":30200", delta=status_icon(vault_up))
+    loki_up    = _port_up(30310)
+    col11.metric("Loki",     ":30310", delta=status_icon(loki_up))
+    reg_up     = _port_up(30880, ipv4=True)
+    col12.metric("Registry", ":30880", delta=status_icon(reg_up))
+    minio_up   = _port_up(30920)
+    col13.metric("MinIO",    ":30920", delta=status_icon(minio_up))
+    nexus_up   = _port_up(30081)
+    col14.metric("Nexus",    ":30081", delta=status_icon(nexus_up))
+    helm_ok    = bool(_sh.which("helm"))
+    col15.metric("Helm",     "installed" if helm_ok else "missing", delta=status_icon(helm_ok))
 
     st.divider()
 
-    # Port status
-    st.subheader("Port Status")
+    # Port status — all services
+    st.subheader("Port Status — All Services")
     all_ports = {
-        **health["ports"],
+        "Jenkins:30080":    health["ports"].get("Jenkins:30080", False),
+        "SonarQube:30900":  health["ports"].get("SonarQube:30900", False),
         "Prometheus:30090": prom_up,
         "Grafana:30030":    graf_up,
         "ArgoCD:30085":     argo_up,
+        "Vault:30200":      vault_up,
+        "Loki:30310":       loki_up,
+        "Registry:30880":   reg_up,
+        "MinIO:30920":      minio_up,
+        "Nexus:30081":      nexus_up,
     }
-    pcols = st.columns(len(all_ports))
+    pcols = st.columns(5)
     for i, (name, open_) in enumerate(all_ports.items()):
-        pcols[i].markdown(f"{'🟢' if open_ else '🔴'} **{name}**")
+        pcols[i % 5].markdown(f"{'🟢' if open_ else '🔴'} **{name}**")
 
     st.divider()
 
@@ -1183,3 +1230,695 @@ elif page == "🛡️ Trivy Scanner":
                 st.dataframe(findings, use_container_width=True)
             else:
                 st.success("No misconfigurations found!")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 10 — HELM MANAGER
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "⛵ Helm Manager":
+    import shutil as _sh
+    st.title("⛵ Helm Manager")
+    st.caption("Manage Helm charts and releases")
+
+    if not _sh.which("helm"):
+        st.error("Helm not installed. Run: `brew install helm`")
+        st.stop()
+
+    def helm(args): return subprocess.run(["helm"] + args.split(), capture_output=True, text=True, timeout=60)
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Releases", "Repositories", "Install / Upgrade", "History"])
+
+    with tab1:
+        st.subheader("All Helm Releases")
+        ns_h = st.text_input("Namespace", value="default", key="helm_ns")
+        all_ns = st.checkbox("All namespaces", key="helm_all_ns")
+        if st.button("🔄 List Releases", type="primary"):
+            cmd = f"list {'--all-namespaces' if all_ns else f'-n {ns_h}'}"
+            r = helm(cmd)
+            st.code(r.stdout or r.stderr, language="bash")
+
+    with tab2:
+        st.subheader("Configured Repositories")
+        if st.button("📋 List Repos"):
+            r = helm("repo list")
+            st.code(r.stdout or "No repositories configured", language="bash")
+
+        st.divider()
+        st.subheader("Add Repository")
+        with st.form("add_repo"):
+            repo_name = st.text_input("Repo name", placeholder="bitnami")
+            repo_url  = st.text_input("Repo URL", placeholder="https://charts.bitnami.com/bitnami")
+            if st.form_submit_button("➕ Add & Update"):
+                with st.spinner("Adding repo..."):
+                    r = helm(f"repo add {repo_name} {repo_url}")
+                    helm("repo update")
+                if r.returncode == 0:
+                    st.success(f"Repo '{repo_name}' added")
+                else:
+                    st.error(r.stderr)
+
+        st.divider()
+        st.subheader("Search Charts")
+        keyword = st.text_input("Search keyword", key="helm_search")
+        if st.button("🔍 Search") and keyword:
+            r = helm(f"search repo {keyword}")
+            st.code(r.stdout or "No results", language="bash")
+
+    with tab3:
+        st.subheader("Install / Upgrade Chart")
+        with st.form("helm_install"):
+            col1, col2 = st.columns(2)
+            rel_name  = col1.text_input("Release name", placeholder="my-nginx")
+            chart     = col2.text_input("Chart", placeholder="bitnami/nginx")
+            col3, col4 = st.columns(2)
+            ns_i      = col3.text_input("Namespace", value="default")
+            version   = col4.text_input("Version (optional)")
+            values_yaml = st.text_area("Values override (YAML)", height=100,
+                                       placeholder="replicaCount: 2\nservice:\n  type: NodePort")
+            upgrade   = st.checkbox("Upgrade if exists (--install)", value=True)
+            submitted = st.form_submit_button("🚀 Deploy")
+            if submitted and rel_name and chart:
+                import tempfile, os as _os
+                args = ["upgrade" if upgrade else "install", rel_name, chart, "-n", ns_i]
+                if upgrade: args.append("--install")
+                if version: args += ["--version", version]
+                tmp = None
+                if values_yaml.strip():
+                    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+                        f.write(values_yaml); tmp = f.name
+                    args += ["-f", tmp]
+                with st.spinner(f"Deploying {rel_name}..."):
+                    r = subprocess.run(["helm"] + args, capture_output=True, text=True, timeout=120)
+                if tmp: _os.unlink(tmp)
+                if r.returncode == 0:
+                    st.success(f"Release '{rel_name}' deployed!")
+                    st.code(r.stdout, language="bash")
+                else:
+                    st.error(r.stderr)
+
+        st.divider()
+        st.subheader("Uninstall Release")
+        with st.form("helm_uninstall"):
+            del_name = st.text_input("Release name to uninstall")
+            del_ns   = st.text_input("Namespace", value="default")
+            if st.form_submit_button("🗑 Uninstall", type="primary"):
+                r = subprocess.run(["helm", "uninstall", del_name, "-n", del_ns],
+                                   capture_output=True, text=True, timeout=60)
+                if r.returncode == 0:
+                    st.success(f"Release '{del_name}' uninstalled")
+                else:
+                    st.error(r.stderr)
+
+    with tab4:
+        st.subheader("Release History & Rollback")
+        with st.form("helm_history"):
+            hist_name = st.text_input("Release name")
+            hist_ns   = st.text_input("Namespace", value="default")
+            if st.form_submit_button("📜 Get History"):
+                r = subprocess.run(["helm", "history", hist_name, "-n", hist_ns],
+                                   capture_output=True, text=True, timeout=30)
+                st.code(r.stdout or r.stderr, language="bash")
+
+        with st.form("helm_rollback"):
+            rb_name = st.text_input("Release name", key="rb_name")
+            rb_rev  = st.number_input("Revision (0 = previous)", min_value=0, value=0)
+            rb_ns   = st.text_input("Namespace", value="default", key="rb_ns")
+            if st.form_submit_button("⏮ Rollback"):
+                r = subprocess.run(["helm", "rollback", rb_name, str(rb_rev), "-n", rb_ns],
+                                   capture_output=True, text=True, timeout=60)
+                if r.returncode == 0:
+                    st.success(f"Rolled back '{rb_name}' to revision {rb_rev or 'previous'}")
+                else:
+                    st.error(r.stderr)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 11 — VAULT
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🔐 Vault Secrets":
+    st.title("🔐 HashiCorp Vault")
+    st.caption(f"Endpoint: {VAULT_URL} | Token: `root` (dev mode)")
+
+    import httpx as _hx
+    _vh = {"X-Vault-Token": VAULT_TOKEN, "Content-Type": "application/json"}
+
+    def v_get(path):
+        try:
+            r = _hx.get(f"{VAULT_URL}/v1/{path}", headers=_vh, timeout=8)
+            return r.json()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def v_post(path, data):
+        try:
+            r = _hx.post(f"{VAULT_URL}/v1/{path}", headers=_vh, json=data, timeout=8)
+            return r.json() if r.text else {"status": r.status_code}
+        except Exception as e:
+            return {"error": str(e)}
+
+    # Health check
+    try:
+        _vr = _hx.get(f"{VAULT_URL}/v1/sys/health", timeout=5)
+        _vd = _vr.json()
+        if not _vd.get("sealed", True):
+            st.success(f"🟢 Vault Unsealed | Version: {_vd.get('version')} | Cluster: {_vd.get('cluster_name','dev')}")
+        else:
+            st.error("🔴 Vault is sealed")
+    except Exception as _e:
+        st.error(f"🔴 Vault unreachable: {_e}")
+        st.stop()
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Secrets", "Write Secret", "Policies", "Auth & Tokens"])
+
+    with tab1:
+        st.subheader("Browse Secrets")
+        secret_path = st.text_input("Path (list)", value="secret", key="v_list_path")
+        if st.button("📋 List", key="v_list"):
+            res = v_get(f"{secret_path}?list=true")
+            keys = res.get("data", {}).get("keys", [])
+            if keys:
+                for k in keys:
+                    st.markdown(f"- `{k}`")
+            else:
+                st.info(f"No secrets at '{secret_path}'")
+
+        st.divider()
+        st.subheader("Read Secret")
+        read_path = st.text_input("Full path", value="secret/myapp", key="v_read_path")
+        if st.button("🔍 Read", key="v_read"):
+            res = v_get(read_path)
+            data = res.get("data", {})
+            if "data" in data: data = data["data"]
+            if data and "error" not in res:
+                for k, v in data.items():
+                    st.code(f"{k} = {v}")
+            else:
+                st.warning(res.get("errors", ["Secret not found"])[0] if "errors" in res else "Not found")
+
+    with tab2:
+        st.subheader("Write Secret")
+        with st.form("vault_write"):
+            w_path = st.text_input("Path", value="secret/data/myapp",
+                                   help="KV v2: secret/data/myapp | KV v1: secret/myapp")
+            w_key   = st.text_input("Key")
+            w_value = st.text_input("Value", type="password")
+            if st.form_submit_button("💾 Write"):
+                payload = {"data": {w_key: w_value}} if "secret/data/" in w_path else {w_key: w_value}
+                res = v_post(w_path, payload)
+                if "error" not in res:
+                    st.success(f"Secret written to `{w_path}`")
+                else:
+                    st.error(res["error"])
+
+        st.divider()
+        st.subheader("Secret Engines")
+        if st.button("📋 List Engines"):
+            res = v_get("sys/mounts")
+            for path, info in res.items():
+                if isinstance(info, dict) and "type" in info:
+                    st.markdown(f"- `{path}` → **{info['type']}** {info.get('description','')}")
+
+    with tab3:
+        st.subheader("Policies")
+        if st.button("📋 List Policies"):
+            res = v_get("sys/policy")
+            for p in res.get("policies", []):
+                st.markdown(f"- `{p}`")
+
+        st.divider()
+        st.subheader("Read Policy")
+        pol_name = st.text_input("Policy name", value="default")
+        if st.button("🔍 Read Policy"):
+            res = v_get(f"sys/policy/{pol_name}")
+            st.code(res.get("rules", "No rules"), language="hcl")
+
+        st.divider()
+        st.subheader("Write Policy")
+        with st.form("vault_policy"):
+            np_name  = st.text_input("Policy name")
+            np_rules = st.text_area("HCL rules",
+                value='path "secret/*" {\n  capabilities = ["read", "list"]\n}', height=150)
+            if st.form_submit_button("💾 Save Policy"):
+                import httpx as _hx2
+                r = _hx2.put(f"{VAULT_URL}/v1/sys/policy/{np_name}",
+                             headers=_vh, json={"rules": np_rules}, timeout=8)
+                if r.status_code == 204:
+                    st.success(f"Policy '{np_name}' saved")
+                else:
+                    st.error(r.text)
+
+    with tab4:
+        st.subheader("Create Token")
+        with st.form("vault_token"):
+            t_policies = st.multiselect("Policies", ["default", "root"], default=["default"])
+            t_ttl      = st.text_input("TTL", value="24h")
+            t_name     = st.text_input("Display name", value="mcp-token")
+            if st.form_submit_button("🔑 Create Token"):
+                res = v_post("auth/token/create", {"policies": t_policies, "ttl": t_ttl, "display_name": t_name})
+                if "auth" in res:
+                    st.success("Token created!")
+                    st.code(res["auth"]["client_token"])
+                    st.info(f"TTL: {res['auth']['lease_duration']}s | Policies: {res['auth']['policies']}")
+                else:
+                    st.error(str(res))
+
+        st.divider()
+        st.subheader("Auth Methods")
+        if st.button("📋 List Auth Methods"):
+            res = v_get("sys/auth")
+            for path, info in res.items():
+                if isinstance(info, dict) and "type" in info:
+                    st.markdown(f"- `{path}` → **{info['type']}**")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 12 — LOKI LOGS
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "📜 Loki Logs":
+    st.title("📜 Loki Log Explorer")
+    st.caption(f"Endpoint: {LOKI_URL}")
+
+    import httpx as _hx
+    import time as _time
+
+    try:
+        _lr = _hx.get(f"{LOKI_URL}/ready", timeout=5)
+        if _lr.status_code == 200:
+            st.success("🟢 Loki is ready")
+        else:
+            st.error(f"🔴 Loki not ready: HTTP {_lr.status_code}")
+    except Exception as _e:
+        st.error(f"🔴 Loki unreachable: {_e}")
+        st.stop()
+
+    def loki_query(logql, limit=100, since_h=1):
+        end = int(_time.time() * 1e9)
+        start = int((_time.time() - since_h * 3600) * 1e9)
+        try:
+            r = _hx.get(f"{LOKI_URL}/loki/api/v1/query_range",
+                        params={"query": logql, "limit": limit, "start": start,
+                                "end": end, "direction": "backward"}, timeout=20)
+            return r.json()
+        except Exception as e:
+            return {"error": str(e)}
+
+    tab1, tab2, tab3 = st.tabs(["Query Logs", "Labels", "Error Monitor"])
+
+    with tab1:
+        st.subheader("LogQL Query")
+        col1, col2, col3 = st.columns([3, 1, 1])
+        logql   = col1.text_input("LogQL", value='{namespace="devops"}', key="loki_q")
+        since_h = col2.number_input("Hours back", 1, 72, value=1)
+        limit   = col3.number_input("Limit", 10, 500, value=50)
+
+        if st.button("🔍 Query Logs", type="primary"):
+            with st.spinner("Querying Loki..."):
+                res = loki_query(logql, limit=int(limit), since_h=int(since_h))
+            if "error" in res:
+                st.error(res["error"])
+            else:
+                streams = res.get("data", {}).get("result", [])
+                if not streams:
+                    st.info("No logs found")
+                else:
+                    lines = []
+                    for stream in streams:
+                        labels = stream.get("stream", {})
+                        ns  = labels.get("namespace", "?")
+                        pod = labels.get("pod", labels.get("app", "?"))
+                        for ts, log in stream.get("values", []):
+                            t = _time.strftime("%H:%M:%S", _time.localtime(int(ts) // 1_000_000_000))
+                            lines.append(f"{t} [{ns}/{pod}] {log}")
+                    st.code("\n".join(lines[:int(limit)]), language="bash")
+
+        st.divider()
+        st.subheader("Quick Filters")
+        col_a, col_b = st.columns(2)
+        app_filter = col_a.text_input("App label", placeholder="jenkins")
+        kw_filter  = col_b.text_input("Keyword filter", placeholder="error")
+
+        if st.button("🔍 Quick Search"):
+            base = f'{{namespace="devops"{f", app=\"{app_filter}\"" if app_filter else ""}}}'
+            q = f'{base} |= "{kw_filter}"' if kw_filter else base
+            with st.spinner("Searching..."):
+                res = loki_query(q, limit=50, since_h=2)
+            streams = res.get("data", {}).get("result", [])
+            lines = []
+            for stream in streams:
+                labels = stream.get("stream", {})
+                for ts, log in stream.get("values", []):
+                    t = _time.strftime("%H:%M:%S", _time.localtime(int(ts) // 1_000_000_000))
+                    lines.append(f"{t} [{labels.get('pod','?')}] {log}")
+            if lines:
+                st.code("\n".join(lines), language="bash")
+            else:
+                st.info("No matching logs")
+
+    with tab2:
+        st.subheader("Available Labels")
+        if st.button("📋 List Labels"):
+            try:
+                r = _hx.get(f"{LOKI_URL}/loki/api/v1/labels", timeout=8)
+                labels = r.json().get("data", [])
+                cols = st.columns(4)
+                for i, l in enumerate(labels):
+                    cols[i % 4].markdown(f"- `{l}`")
+            except Exception as e:
+                st.error(str(e))
+
+        st.divider()
+        label_sel = st.text_input("Get values for label", value="namespace")
+        if st.button("🔍 Get Values"):
+            try:
+                r = _hx.get(f"{LOKI_URL}/loki/api/v1/label/{label_sel}/values", timeout=8)
+                vals = r.json().get("data", [])
+                for v in vals:
+                    st.markdown(f"- `{v}`")
+            except Exception as e:
+                st.error(str(e))
+
+    with tab3:
+        st.subheader("Error Monitor — Last 1h")
+        if st.button("🚨 Check Errors", type="primary"):
+            with st.spinner("Scanning for errors..."):
+                res = loki_query('{namespace="devops"} |~ "(?i)(error|exception|fatal|panic)"', limit=100, since_h=1)
+            streams = res.get("data", {}).get("result", [])
+            if not streams:
+                st.success("✅ No errors in the last hour!")
+            else:
+                lines = []
+                for stream in streams:
+                    labels = stream.get("stream", {})
+                    pod = labels.get("pod", labels.get("app", "?"))
+                    for ts, log in stream.get("values", []):
+                        t = _time.strftime("%H:%M:%S", _time.localtime(int(ts) // 1_000_000_000))
+                        lines.append(f"{t} [{pod}] {log}")
+                st.warning(f"⚠️ {len(lines)} error log entries found")
+                st.code("\n".join(lines), language="bash")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 13 — CONTAINER REGISTRY
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "📦 Container Registry":
+    st.title("📦 Container Registry")
+    st.caption(f"API: {REGISTRY_URL} | UI: {REGISTRY_UI_URL}")
+
+    import httpx as _hx
+
+    try:
+        r = _hx.get(f"{REGISTRY_URL}/v2/", timeout=5)
+        st.success(f"🟢 Registry healthy | UI: [{REGISTRY_UI_URL}]({REGISTRY_UI_URL})")
+    except Exception as e:
+        st.error(f"🔴 Registry unreachable: {e}")
+        st.stop()
+
+    tab1, tab2, tab3 = st.tabs(["Browse", "Delete Image", "Push Instructions"])
+
+    with tab1:
+        st.subheader("Repositories")
+        if st.button("📋 List Repositories", type="primary"):
+            r = _hx.get(f"{REGISTRY_URL}/v2/_catalog", timeout=8)
+            repos = r.json().get("repositories", [])
+            if repos:
+                for repo in repos:
+                    with st.expander(f"📦 {repo}"):
+                        tr = _hx.get(f"{REGISTRY_URL}/v2/{repo}/tags/list", timeout=8)
+                        tags = tr.json().get("tags", []) or []
+                        for tag in tags:
+                            st.markdown(f"  - `{repo}:{tag}`")
+            else:
+                st.info("No images pushed yet")
+                st.markdown("**Push your first image:**")
+                st.code(f"docker tag myapp:latest 127.0.0.1:30880/myapp:latest\ndocker push 127.0.0.1:30880/myapp:latest", language="bash")
+
+        st.divider()
+        st.subheader("Image Tags")
+        repo_name = st.text_input("Repository name", placeholder="myapp")
+        if st.button("🔍 List Tags") and repo_name:
+            r = _hx.get(f"{REGISTRY_URL}/v2/{repo_name}/tags/list", timeout=8)
+            tags = r.json().get("tags", []) or []
+            if tags:
+                st.dataframe([{"Tag": t, "Pull": f"docker pull 127.0.0.1:30880/{repo_name}:{t}"} for t in tags],
+                             use_container_width=True)
+            else:
+                st.info("No tags found")
+
+    with tab2:
+        st.subheader("Delete Image Tag")
+        st.warning("Deletion removes the manifest. Run garbage-collect to free disk space.")
+        with st.form("del_image"):
+            del_repo = st.text_input("Repository")
+            del_tag  = st.text_input("Tag", value="latest")
+            if st.form_submit_button("🗑 Delete", type="primary"):
+                # Get digest first
+                mr = _hx.get(f"{REGISTRY_URL}/v2/{del_repo}/manifests/{del_tag}",
+                             headers={"Accept": "application/vnd.docker.distribution.manifest.v2+json"},
+                             timeout=8)
+                digest = mr.headers.get("Docker-Content-Digest")
+                if digest:
+                    dr = _hx.delete(f"{REGISTRY_URL}/v2/{del_repo}/manifests/{digest}", timeout=8)
+                    if dr.status_code == 202:
+                        st.success(f"Deleted `{del_repo}:{del_tag}`")
+                    else:
+                        st.error(f"Delete failed: HTTP {dr.status_code}")
+                else:
+                    st.error("Could not get image digest")
+
+    with tab3:
+        st.subheader("How to Push Images")
+        st.info("This registry runs without TLS — add it as an insecure registry in Docker Desktop settings.")
+        st.code("""# 1. Add to Docker Desktop → Settings → Docker Engine:
+{
+  "insecure-registries": ["127.0.0.1:30880"]
+}
+
+# 2. Tag & push
+docker tag myapp:latest 127.0.0.1:30880/myapp:latest
+docker push 127.0.0.1:30880/myapp:latest
+
+# 3. Pull in K8s pod spec
+image: 127.0.0.1:30880/myapp:latest""", language="bash")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 14 — MINIO
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🗄️ MinIO Storage":
+    st.title("🗄️ MinIO Object Storage")
+    st.caption(f"API: {MINIO_URL} | Console: [{MINIO_CONSOLE_URL}]({MINIO_CONSOLE_URL})")
+
+    import httpx as _hx
+
+    try:
+        r = _hx.get(f"{MINIO_URL}/minio/health/ready", timeout=5)
+        if r.status_code == 200:
+            st.success(f"🟢 MinIO healthy | Console: {MINIO_CONSOLE_URL}")
+        else:
+            st.error(f"🔴 MinIO not ready: HTTP {r.status_code}")
+            st.stop()
+    except Exception as e:
+        st.error(f"🔴 MinIO unreachable: {e}")
+        st.stop()
+
+    def mc(args):
+        import subprocess as _sp
+        _sp.run(["mc", "alias", "set", "myminio", MINIO_URL, "admin", "Admin@123456789@"],
+                capture_output=True, timeout=10)
+        r = _sp.run(["mc", "--json"] + args.split(), capture_output=True, text=True, timeout=30)
+        return r.stdout, r.stderr, r.returncode
+
+    mc_ok = bool(__import__("shutil").which("mc"))
+
+    tab1, tab2, tab3 = st.tabs(["Buckets", "Objects", "Settings"])
+
+    with tab1:
+        st.subheader("Buckets")
+        if st.button("📋 List Buckets", type="primary"):
+            if mc_ok:
+                out, err, rc = mc("ls myminio")
+                import json as _j
+                lines = []
+                for line in out.splitlines():
+                    try:
+                        d = _j.loads(line)
+                        lines.append({"Bucket": d.get("key",""), "Type": d.get("type","")})
+                    except Exception:
+                        if line.strip(): lines.append({"Bucket": line, "Type": ""})
+                if lines:
+                    st.dataframe(lines, use_container_width=True)
+                else:
+                    st.info("No buckets found")
+            else:
+                st.warning("`mc` not installed. Run: `brew install minio-mc`")
+                st.markdown(f"Open the MinIO Console at [{MINIO_CONSOLE_URL}]({MINIO_CONSOLE_URL}) to manage buckets.")
+
+        st.divider()
+        st.subheader("Create Bucket")
+        with st.form("create_bucket"):
+            bucket_name = st.text_input("Bucket name")
+            if st.form_submit_button("➕ Create"):
+                if mc_ok:
+                    _, err, rc = mc(f"mb myminio/{bucket_name}")
+                    if rc == 0:
+                        st.success(f"Bucket '{bucket_name}' created")
+                    else:
+                        st.error(err)
+                else:
+                    st.warning("Install `mc` to create buckets via CLI")
+
+    with tab2:
+        st.subheader("Browse Objects")
+        b_name = st.text_input("Bucket name", key="minio_browse")
+        if st.button("📂 List Objects") and b_name:
+            if mc_ok:
+                out, err, rc = mc(f"ls myminio/{b_name}")
+                import json as _j
+                lines = []
+                for line in out.splitlines():
+                    try:
+                        d = _j.loads(line)
+                        lines.append({"Object": d.get("key",""), "Size": d.get("size",0), "Modified": d.get("lastModified","")[:19]})
+                    except Exception:
+                        if line.strip(): lines.append({"Object": line, "Size": 0, "Modified": ""})
+                if lines:
+                    st.dataframe(lines, use_container_width=True)
+                else:
+                    st.info("No objects in bucket")
+            else:
+                st.warning("Install `mc`: `brew install minio-mc`")
+
+    with tab3:
+        st.subheader("Connection Info")
+        st.code(f"""# MinIO credentials
+Access Key: admin
+Secret Key: Admin@123456789@
+API:        {MINIO_URL}
+Console:    {MINIO_CONSOLE_URL}
+
+# Configure mc client
+mc alias set myminio {MINIO_URL} admin Admin@123456789@
+
+# S3 compatible endpoint (for Terraform, etc.)
+endpoint = "{MINIO_URL}"
+access_key = "admin"
+secret_key = "Admin@123456789@"
+""", language="bash")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 15 — NEXUS
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🏛️ Nexus Repository":
+    st.title("🏛️ Nexus Repository Manager")
+    st.caption(f"URL: {NEXUS_URL}")
+
+    import httpx as _hx
+
+    try:
+        r = _hx.get(f"{NEXUS_URL}/service/rest/v1/status", auth=NEXUS_AUTH, timeout=8)
+        if r.status_code == 200:
+            st.success("🟢 Nexus is healthy")
+        else:
+            st.error(f"🔴 Nexus: HTTP {r.status_code}")
+            st.stop()
+    except Exception as e:
+        st.error(f"🔴 Nexus unreachable: {e}")
+        st.stop()
+
+    def nx_get(path, params={}):
+        try:
+            r = _hx.get(f"{NEXUS_URL}/service/rest{path}", auth=NEXUS_AUTH, params=params, timeout=10)
+            return r.json() if r.text else {}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def nx_post(path, data):
+        try:
+            r = _hx.post(f"{NEXUS_URL}/service/rest{path}", auth=NEXUS_AUTH, json=data,
+                         headers={"Content-Type": "application/json"}, timeout=10)
+            return r.status_code, r.text
+        except Exception as e:
+            return 0, str(e)
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Repositories", "Search", "Create Repo", "Users"])
+
+    with tab1:
+        st.subheader("All Repositories")
+        if st.button("📋 List Repositories", type="primary"):
+            res = nx_get("/v1/repositories")
+            repos = res if isinstance(res, list) else []
+            if repos:
+                df = [{"Name": r["name"], "Format": r.get("format","?"),
+                       "Type": r.get("type","?"), "URL": r.get("url","")} for r in repos]
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No repositories or error loading")
+
+    with tab2:
+        st.subheader("Search Components")
+        col1, col2 = st.columns(2)
+        repo_s   = col1.text_input("Repository (optional)")
+        keyword  = col2.text_input("Keyword")
+        if st.button("🔍 Search") and keyword:
+            params = {"keyword": keyword}
+            if repo_s: params["repository"] = repo_s
+            res = nx_get("/v1/search", params)
+            items = res.get("items", [])
+            if items:
+                df = [{"Group": c.get("group",""), "Name": c.get("name",""),
+                       "Version": c.get("version",""), "Repository": c.get("repository","")}
+                      for c in items[:30]]
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No components found")
+
+    with tab3:
+        st.subheader("Create Hosted Repository")
+        with st.form("nexus_create_repo"):
+            rn = st.text_input("Repository name")
+            rf = st.selectbox("Format", ["maven2", "npm", "pypi", "raw", "docker", "helm"])
+            if st.form_submit_button("➕ Create"):
+                payload = {
+                    "name": rn, "online": True,
+                    "storage": {"blobStoreName": "default", "strictContentTypeValidation": True, "writePolicy": "allow"},
+                }
+                if rf == "maven2":
+                    payload["maven"] = {"versionPolicy": "MIXED", "layoutPolicy": "STRICT"}
+                code, resp = nx_post(f"/v1/repositories/{rf}/hosted", payload)
+                if code in [200, 201]:
+                    st.success(f"Repository '{rn}' ({rf}) created!")
+                else:
+                    st.error(f"HTTP {code}: {resp[:300]}")
+
+        st.divider()
+        st.subheader("Create Proxy Repository")
+        with st.form("nexus_proxy_repo"):
+            pn = st.text_input("Repository name", placeholder="npm-proxy")
+            pf = st.selectbox("Format", ["npm", "maven2", "pypi", "raw"], key="pf")
+            pu = st.text_input("Remote URL", placeholder="https://registry.npmjs.org")
+            if st.form_submit_button("➕ Create Proxy"):
+                payload = {
+                    "name": pn, "online": True,
+                    "storage": {"blobStoreName": "default", "strictContentTypeValidation": True},
+                    "proxy": {"remoteUrl": pu, "contentMaxAge": 1440, "metadataMaxAge": 1440},
+                    "negativeCache": {"enabled": True, "timeToLive": 1440},
+                    "httpClient": {"blocked": False, "autoBlock": True},
+                }
+                code, resp = nx_post(f"/v1/repositories/{pf}/proxy", payload)
+                if code in [200, 201]:
+                    st.success(f"Proxy repository '{pn}' created!")
+                else:
+                    st.error(f"HTTP {code}: {resp[:300]}")
+
+    with tab4:
+        st.subheader("Users")
+        if st.button("📋 List Users"):
+            res = nx_get("/v1/security/users")
+            users = res if isinstance(res, list) else []
+            if users:
+                df = [{"User": u.get("userId",""), "Name": f"{u.get('firstName','')} {u.get('lastName','')}",
+                       "Email": u.get("emailAddress",""), "Status": u.get("status","")} for u in users]
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("No users found")

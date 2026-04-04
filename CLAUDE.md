@@ -10,12 +10,18 @@ All services live in the `devops` or `argocd` namespace. No cloud account requir
 
 | Service      | Container           | NodePort                   | Credentials              |
 |--------------|---------------------|----------------------------|--------------------------|
-| Jenkins      | `deploy/jenkins`    | http://localhost:30080     | admin / admin@123456789@       |
-| SonarQube    | `deploy/sonarqube`  | http://localhost:30900     | admin / Aa75696462461@   |
+| Jenkins      | `deploy/jenkins`    | http://localhost:30080     | admin / Admin@123456789@       |
+| SonarQube    | `deploy/sonarqube`  | http://localhost:30900     | admin / Admin@123456789@ |
 | PostgreSQL   | `deploy/postgres`   | ClusterIP only (internal)  | sonar / sonar            |
 | Prometheus   | `deploy/prometheus` | http://localhost:30090     | no auth                  |
-| Grafana      | `deploy/grafana`    | http://localhost:30030     | admin / admin@123456789@       |
-| ArgoCD       | `argocd-server`     | http://localhost:30085     | admin / admin@123456789@       |
+| Grafana      | `deploy/grafana`    | http://localhost:30030     | admin / Admin@123456789@       |
+| ArgoCD       | `argocd-server`     | https://localhost:30085    | admin / Admin@123456789@       |
+| Vault        | `deploy/vault`      | http://localhost:30200     | token: root                    |
+| Loki         | `deploy/loki`       | http://localhost:30310     | no auth                        |
+| Harbor       | `deploy/harbor`     | http://localhost:30880     | admin / Admin@123456789@       |
+| MinIO API    | `deploy/minio`      | http://localhost:30920     | admin / Admin@123456789@       |
+| MinIO Console| `deploy/minio`      | http://localhost:30921     | admin / Admin@123456789@       |
+| Nexus        | `deploy/nexus`      | http://localhost:30081     | admin / Admin@123456789@       |
 
 ---
 
@@ -31,7 +37,13 @@ All services live in the `devops` or `argocd` namespace. No cloud account requir
 | 6 | `servers/06_kubernetes_manager.py` | kubernetes-manager   | kubectl / K8s resources           |
 | 7 | `servers/07_prometheus_grafana.py` | prometheus-grafana   | Prometheus PromQL + Grafana API   |
 | 8 | `servers/08_argocd_manager.py`     | argocd-manager       | ArgoCD GitOps deployments         |
-| 9 | `servers/09_trivy_scanner.py`      | trivy-scanner        | Trivy CVE & IaC scanning          |
+| 9  | `servers/09_trivy_scanner.py`      | trivy-scanner        | Trivy CVE & IaC scanning          |
+| 10 | `servers/10_helm_manager.py`       | helm-manager         | Helm charts & releases            |
+| 11 | `servers/11_vault_manager.py`      | vault-manager        | HashiCorp Vault secrets & policies|
+| 12 | `servers/12_loki_manager.py`       | loki-manager         | Loki log queries (LogQL)          |
+| 13 | `servers/13_harbor_manager.py`     | harbor-manager       | Harbor container registry         |
+| 14 | `servers/14_minio_manager.py`      | minio-manager        | MinIO S3-compatible object storage|
+| 15 | `servers/15_nexus_manager.py`      | nexus-manager        | Nexus artifact repository         |
 
 ---
 
@@ -93,16 +105,29 @@ mcp-server-01/
 |-----------------|------------------------|----------------------------------------------|
 | JENKINS_URL     | http://localhost:30080 | jenkins-manager, devops-dashboard            |
 | JENKINS_USER    | admin                  | jenkins-manager, devops-dashboard            |
-| JENKINS_PASS    | admin@123456789@             | jenkins-manager, devops-dashboard            |
+| JENKINS_PASS    | Admin@123456789@             | jenkins-manager, devops-dashboard            |
 | SONAR_URL       | http://localhost:30900 | sonarqube-manager, devops-dashboard          |
 | SONAR_USER      | admin                  | sonarqube-manager, devops-dashboard          |
-| SONAR_PASS      | Aa75696462461@         | sonarqube-manager, devops-dashboard          |
+| SONAR_PASS      | Admin@123456789@       | sonarqube-manager, devops-dashboard          |
 | PROMETHEUS_URL  | http://localhost:30090 | prometheus-grafana                           |
 | GRAFANA_URL     | http://localhost:30030 | prometheus-grafana                           |
 | GRAFANA_USER    | admin                  | prometheus-grafana                           |
-| GRAFANA_PASS    | admin@123456789@             | prometheus-grafana                           |
-| ARGOCD_URL      | http://localhost:30085 | argocd-manager                               |
+| GRAFANA_PASS    | Admin@123456789@             | prometheus-grafana                           |
+| ARGOCD_URL      | https://localhost:30085 | argocd-manager                               |
 | ARGOCD_USER     | admin                  | argocd-manager                               |
+| VAULT_URL       | http://localhost:30200  | vault-manager                                |
+| VAULT_TOKEN     | root                   | vault-manager                                |
+| LOKI_URL        | http://localhost:30310  | loki-manager                                 |
+| HARBOR_URL      | http://localhost:30880  | harbor-manager                               |
+| HARBOR_USER     | admin                  | harbor-manager                               |
+| HARBOR_PASS     | Admin@123456789@       | harbor-manager                               |
+| MINIO_URL       | http://localhost:30920  | minio-manager                                |
+| MINIO_CONSOLE_URL| http://localhost:30921 | minio-manager                                |
+| MINIO_ACCESS_KEY| admin                  | minio-manager                                |
+| MINIO_SECRET_KEY| Admin@123456789@       | minio-manager                                |
+| NEXUS_URL       | http://localhost:30081  | nexus-manager                                |
+| NEXUS_USER      | admin                  | nexus-manager                                |
+| NEXUS_PASS      | Admin@123456789@       | nexus-manager                                |
 
 ---
 
@@ -137,12 +162,12 @@ kubectl get svc -n devops
 ```bash
 claude mcp add docker-manager    -- python3 servers/01_docker_manager.py
 claude mcp add terraform-manager -- python3 servers/02_terraform_manager.py
-claude mcp add sonarqube-manager -e SONAR_URL=http://localhost:30900 -e SONAR_USER=admin -e SONAR_PASS='Aa75696462461@' -- python3 servers/03_sonarqube_manager.py
-claude mcp add jenkins-manager   -e JENKINS_URL=http://localhost:30080 -e JENKINS_USER=admin -e JENKINS_PASS=admin -- python3 servers/04_jenkins_manager.py
-claude mcp add devops-dashboard  -e JENKINS_URL=http://localhost:30080 -e JENKINS_USER=admin -e JENKINS_PASS=admin -e SONAR_URL=http://localhost:30900 -e SONAR_USER=admin -e SONAR_PASS='Aa75696462461@' -- python3 servers/05_devops_dashboard.py
+claude mcp add sonarqube-manager -e SONAR_URL=http://localhost:30900 -e SONAR_USER=admin -e SONAR_PASS='Admin@123456789@' -- python3 servers/03_sonarqube_manager.py
+claude mcp add jenkins-manager   -e JENKINS_URL=http://localhost:30080 -e JENKINS_USER=admin -e JENKINS_PASS='Admin@123456789@' -- python3 servers/04_jenkins_manager.py
+claude mcp add devops-dashboard  -e JENKINS_URL=http://localhost:30080 -e JENKINS_USER=admin -e JENKINS_PASS='Admin@123456789@' -e SONAR_URL=http://localhost:30900 -e SONAR_USER=admin -e SONAR_PASS='Admin@123456789@' -- python3 servers/05_devops_dashboard.py
 claude mcp add kubernetes-manager -- python3 servers/06_kubernetes_manager.py
 claude mcp add prometheus-grafana -e PROMETHEUS_URL=http://localhost:30090 -e GRAFANA_URL=http://localhost:30030 -- python3 servers/07_prometheus_grafana.py
-claude mcp add argocd-manager    -e ARGOCD_URL=http://localhost:30085 -- python3 servers/08_argocd_manager.py
+claude mcp add argocd-manager    -e ARGOCD_URL=https://localhost:30085 -e ARGOCD_USER=admin -e ARGOCD_PASS='Admin@123456789@' -- python3 servers/08_argocd_manager.py
 claude mcp add trivy-scanner     -- python3 servers/09_trivy_scanner.py
 ```
 

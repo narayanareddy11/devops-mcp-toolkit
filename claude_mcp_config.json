@@ -16,7 +16,7 @@
       "env": {
         "SONAR_URL": "http://localhost:30900",
         "SONAR_USER": "admin",
-        "SONAR_PASS": "Aa75696462461@"
+        "SONAR_PASS": "Admin@123456789@"
       }
     },
     "jenkins-manager": {
@@ -25,7 +25,7 @@
       "env": {
         "JENKINS_URL": "http://localhost:30080",
         "JENKINS_USER": "admin",
-        "JENKINS_PASS": "admin@123456789@"
+        "JENKINS_PASS": "Admin@123456789@"
       }
     },
     "devops-dashboard": {
@@ -34,10 +34,10 @@
       "env": {
         "JENKINS_URL": "http://localhost:30080",
         "JENKINS_USER": "admin",
-        "JENKINS_PASS": "admin@123456789@",
+        "JENKINS_PASS": "Admin@123456789@",
         "SONAR_URL": "http://localhost:30900",
         "SONAR_USER": "admin",
-        "SONAR_PASS": "Aa75696462461@"
+        "SONAR_PASS": "Admin@123456789@"
       }
     },
     "kubernetes-manager": {
@@ -52,22 +52,71 @@
         "PROMETHEUS_URL": "http://localhost:30090",
         "GRAFANA_URL": "http://localhost:30030",
         "GRAFANA_USER": "admin",
-        "GRAFANA_PASS": "admin@123456789@"
+        "GRAFANA_PASS": "Admin@123456789@"
       }
     },
     "argocd-manager": {
       "command": "python3",
       "args": ["/Users/admin/Desktop/mcp-server-01/servers/08_argocd_manager.py"],
       "env": {
-        "ARGOCD_URL": "http://localhost:30085",
+        "ARGOCD_URL": "https://localhost:30085",
         "ARGOCD_USER": "admin",
-        "ARGOCD_PASS": "admin@123456789@"
+        "ARGOCD_PASS": "Admin@123456789@"
       }
     },
     "trivy-scanner": {
       "command": "python3",
       "args": ["/Users/admin/Desktop/mcp-server-01/servers/09_trivy_scanner.py"],
       "env": {}
+    },
+    "helm-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/10_helm_manager.py"],
+      "env": {}
+    },
+    "vault-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/11_vault_manager.py"],
+      "env": {
+        "VAULT_URL": "http://localhost:30200",
+        "VAULT_TOKEN": "root"
+      }
+    },
+    "loki-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/12_loki_manager.py"],
+      "env": {
+        "LOKI_URL": "http://localhost:30310"
+      }
+    },
+    "harbor-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/13_harbor_manager.py"],
+      "env": {
+        "HARBOR_URL": "http://127.0.0.1:30880",
+        "HARBOR_UI_URL": "http://127.0.0.1:30881",
+        "HARBOR_USER": "admin",
+        "HARBOR_PASS": "Admin@123456789@"
+      }
+    },
+    "minio-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/14_minio_manager.py"],
+      "env": {
+        "MINIO_URL": "http://localhost:30920",
+        "MINIO_CONSOLE_URL": "http://localhost:30921",
+        "MINIO_ACCESS_KEY": "admin",
+        "MINIO_SECRET_KEY": "Admin@123456789@"
+      }
+    },
+    "nexus-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/15_nexus_manager.py"],
+      "env": {
+        "NEXUS_URL": "http://localhost:30081",
+        "NEXUS_USER": "admin",
+        "NEXUS_PASS": "Admin@123456789@"
+      }
     }
   }
 }

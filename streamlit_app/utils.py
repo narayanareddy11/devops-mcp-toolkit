@@ -13,8 +13,8 @@ from pathlib import Path
 # ── Service config ─────────────────────────────────────────────────────────────
 JENKINS_URL  = os.environ.get("JENKINS_URL",  "http://localhost:30080")
 SONAR_URL    = os.environ.get("SONAR_URL",    "http://localhost:30900")
-JENKINS_AUTH = (os.environ.get("JENKINS_USER", "admin"), os.environ.get("JENKINS_PASS", "admin@123456789@"))
-SONAR_AUTH   = (os.environ.get("SONAR_USER",  "admin"), os.environ.get("SONAR_PASS",   "Aa75696462461@"))
+JENKINS_AUTH = (os.environ.get("JENKINS_USER", "admin"), os.environ.get("JENKINS_PASS", "Admin@123456789@"))
+SONAR_AUTH   = (os.environ.get("SONAR_USER",  "admin"), os.environ.get("SONAR_PASS",   "Admin@123456789@"))
 TF_WORKDIR   = str(Path(__file__).parent.parent / "terraform" / "local")
 
 

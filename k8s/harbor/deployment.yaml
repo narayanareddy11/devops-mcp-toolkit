@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harbor
+  namespace: devops
+  labels:
+    app: harbor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: harbor
+  template:
+    metadata:
+      labels:
+        app: harbor
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_HTTP_ADDR
+              value: "0.0.0.0:5000"
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
+          volumeMounts:
+            - name: registry-data
+              mountPath: /var/lib/registry
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+        - name: registry-ui
+          image: joxit/docker-registry-ui:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: REGISTRY_URL
+              value: "http://localhost:5000"
+            - name: REGISTRY_TITLE
+              value: "DevOps Container Registry"
+            - name: DELETE_IMAGES
+              value: "true"
+            - name: SHOW_CONTENT_DIGEST
+              value: "true"
+            - name: SINGLE_REGISTRY
+              value: "true"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+      volumes:
+        - name: registry-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: harbor
+  namespace: devops
+  labels:
+    app: harbor
+spec:
+  type: NodePort
+  selector:
+    app: harbor
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
+      nodePort: 30880
+    - name: ui
+      port: 80
+      targetPort: 80
+      nodePort: 30881
