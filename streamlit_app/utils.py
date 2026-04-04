@@ -39,19 +39,29 @@ def tf(cmd: str) -> dict:
 
 
 # ── HTTP helpers ───────────────────────────────────────────────────────────────
-def http_get(url: str, auth: tuple, timeout: int = 8, params: dict = None) -> dict | None:
+def http_get(url: str, auth: tuple = None, timeout: int = 8, params: dict = None) -> dict | None:
     try:
-        r = httpx.get(url, auth=auth, params=params or {}, timeout=timeout, follow_redirects=True)
+        kwargs = {"params": params or {}, "timeout": timeout, "follow_redirects": True}
+        if auth:
+            kwargs["auth"] = auth
+        r = httpx.get(url, **kwargs)
         r.raise_for_status()
         return r.json()
     except Exception:
         return None
 
 
-def http_post(url: str, auth: tuple, data: dict = None, content: bytes = None, headers: dict = None) -> tuple[int, any]:
+def http_post(url: str, auth: tuple = None, data: dict = None, content: bytes = None,
+              headers: dict = None, json_data: dict = None) -> tuple[int, any]:
     try:
-        r = httpx.post(url, auth=auth, data=data, content=content,
-                       headers=headers or {}, timeout=20, follow_redirects=True)
+        kwargs = {"auth": auth, "headers": headers or {}, "timeout": 20, "follow_redirects": True}
+        if json_data is not None:
+            kwargs["json"] = json_data
+        elif content is not None:
+            kwargs["content"] = content
+        else:
+            kwargs["data"] = data
+        r = httpx.post(url, **kwargs)
         try:
             return r.status_code, r.json()
         except Exception:

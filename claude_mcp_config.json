@@ -44,6 +44,29 @@
       "command": "python3",
       "args": ["/Users/admin/Desktop/mcp-server-01/servers/06_kubernetes_manager.py"],
       "env": {}
+    },
+    "prometheus-grafana": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/07_prometheus_grafana.py"],
+      "env": {
+        "PROMETHEUS_URL": "http://localhost:30090",
+        "GRAFANA_URL": "http://localhost:30030",
+        "GRAFANA_USER": "admin",
+        "GRAFANA_PASS": "admin"
+      }
+    },
+    "argocd-manager": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/08_argocd_manager.py"],
+      "env": {
+        "ARGOCD_URL": "http://localhost:30085",
+        "ARGOCD_USER": "admin"
+      }
+    },
+    "trivy-scanner": {
+      "command": "python3",
+      "args": ["/Users/admin/Desktop/mcp-server-01/servers/09_trivy_scanner.py"],
+      "env": {}
     }
   }
 }
