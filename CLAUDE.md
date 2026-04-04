@@ -10,12 +10,12 @@ All services live in the `devops` or `argocd` namespace. No cloud account requir
 
 | Service      | Container           | NodePort                   | Credentials              |
 |--------------|---------------------|----------------------------|--------------------------|
-| Jenkins      | `deploy/jenkins`    | http://localhost:30080     | admin / admin            |
+| Jenkins      | `deploy/jenkins`    | http://localhost:30080     | admin / admin1234@       |
 | SonarQube    | `deploy/sonarqube`  | http://localhost:30900     | admin / Aa75696462461@   |
 | PostgreSQL   | `deploy/postgres`   | ClusterIP only (internal)  | sonar / sonar            |
 | Prometheus   | `deploy/prometheus` | http://localhost:30090     | no auth                  |
-| Grafana      | `deploy/grafana`    | http://localhost:30030     | admin / admin            |
-| ArgoCD       | `argocd-server`     | http://localhost:30085     | admin / (K8s secret)     |
+| Grafana      | `deploy/grafana`    | http://localhost:30030     | admin / admin1234@       |
+| ArgoCD       | `argocd-server`     | http://localhost:30085     | admin / admin1234@       |
 
 ---
 
@@ -93,14 +93,14 @@ mcp-server-01/
 |-----------------|------------------------|----------------------------------------------|
 | JENKINS_URL     | http://localhost:30080 | jenkins-manager, devops-dashboard            |
 | JENKINS_USER    | admin                  | jenkins-manager, devops-dashboard            |
-| JENKINS_PASS    | admin                  | jenkins-manager, devops-dashboard            |
+| JENKINS_PASS    | admin1234@             | jenkins-manager, devops-dashboard            |
 | SONAR_URL       | http://localhost:30900 | sonarqube-manager, devops-dashboard          |
 | SONAR_USER      | admin                  | sonarqube-manager, devops-dashboard          |
 | SONAR_PASS      | Aa75696462461@         | sonarqube-manager, devops-dashboard          |
 | PROMETHEUS_URL  | http://localhost:30090 | prometheus-grafana                           |
 | GRAFANA_URL     | http://localhost:30030 | prometheus-grafana                           |
 | GRAFANA_USER    | admin                  | prometheus-grafana                           |
-| GRAFANA_PASS    | admin                  | prometheus-grafana                           |
+| GRAFANA_PASS    | admin1234@             | prometheus-grafana                           |
 | ARGOCD_URL      | http://localhost:30085 | argocd-manager                               |
 | ARGOCD_USER     | admin                  | argocd-manager                               |
 

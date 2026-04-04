@@ -25,7 +25,7 @@
       "env": {
         "JENKINS_URL": "http://localhost:30080",
         "JENKINS_USER": "admin",
-        "JENKINS_PASS": "admin"
+        "JENKINS_PASS": "admin1234@"
       }
     },
     "devops-dashboard": {
@@ -34,7 +34,7 @@
       "env": {
         "JENKINS_URL": "http://localhost:30080",
         "JENKINS_USER": "admin",
-        "JENKINS_PASS": "admin",
+        "JENKINS_PASS": "admin1234@",
         "SONAR_URL": "http://localhost:30900",
         "SONAR_USER": "admin",
         "SONAR_PASS": "Aa75696462461@"
@@ -52,7 +52,7 @@
         "PROMETHEUS_URL": "http://localhost:30090",
         "GRAFANA_URL": "http://localhost:30030",
         "GRAFANA_USER": "admin",
-        "GRAFANA_PASS": "admin"
+        "GRAFANA_PASS": "admin1234@"
       }
     },
     "argocd-manager": {
@@ -60,7 +60,8 @@
       "args": ["/Users/admin/Desktop/mcp-server-01/servers/08_argocd_manager.py"],
       "env": {
         "ARGOCD_URL": "http://localhost:30085",
-        "ARGOCD_USER": "admin"
+        "ARGOCD_USER": "admin",
+        "ARGOCD_PASS": "admin1234@"
       }
     },
     "trivy-scanner": {

@@ -13,7 +13,7 @@ import os
 
 JENKINS_URL  = os.environ.get("JENKINS_URL",  "http://localhost:30080")
 SONAR_URL    = os.environ.get("SONAR_URL",    "http://localhost:30900")
-JENKINS_AUTH = (os.environ.get("JENKINS_USER", "admin"), os.environ.get("JENKINS_PASS", "admin"))
+JENKINS_AUTH = (os.environ.get("JENKINS_USER", "admin"), os.environ.get("JENKINS_PASS", "admin1234@"))
 SONAR_AUTH   = (os.environ.get("SONAR_USER",  "admin"), os.environ.get("SONAR_PASS",   "Aa75696462461@"))
 
 
