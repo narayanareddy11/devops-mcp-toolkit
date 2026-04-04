@@ -57,7 +57,28 @@ header {visibility: hidden;}
     background: linear-gradient(180deg, #0d1b2a 0%, #1a2a3a 100%);
 }
 [data-testid="stSidebar"] * { color: #e0e0e0 !important; }
-[data-testid="stSidebar"] .stRadio label { color: #b0c4de !important; font-size: 0.9rem; }
+
+/* Nav buttons — look like plain list items */
+[data-testid="stSidebar"] [data-testid="stButton"] > button {
+    width: 100% !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: #b0c4de !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    font-size: 0.83rem !important;
+    line-height: 1.5 !important;
+    min-height: 0 !important;
+    box-shadow: none !important;
+    margin: 1px 0 !important;
+}
+[data-testid="stSidebar"] [data-testid="stButton"] > button:hover {
+    background: rgba(79,195,247,0.12) !important;
+    border-color: rgba(79,195,247,0.25) !important;
+    color: #e0f7fa !important;
+}
 
 /* Page header card */
 .page-header {
@@ -181,10 +202,6 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     st.divider()
 
-    # ── Navigation (session-state driven so each group is independent) ──────────
-    def _nav(key):
-        st.session_state["active_page"] = st.session_state[key]
-
     # Support ?page=<slug> URL param (used by screenshot automation)
     _PAGE_MAP = {
         "dashboard":   "🏠 Dashboard",
@@ -210,93 +227,52 @@ with st.sidebar:
     if "active_page" not in st.session_state:
         st.session_state["active_page"] = "🏠 Dashboard"
 
-    # ── Page navigation ──────────────────────────────────────────────────────────
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.5rem 0 0.3rem 0;">Overview</p>', unsafe_allow_html=True)
-    st.radio("Overview", ["🏠 Dashboard"], key="nav_overview",
-             label_visibility="collapsed", on_change=_nav, args=("nav_overview",))
-
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Infrastructure</p>', unsafe_allow_html=True)
-    st.radio("Infrastructure", ["🐳 Docker", "☸️ Kubernetes", "🌍 Terraform"], key="nav_infra",
-             label_visibility="collapsed", on_change=_nav, args=("nav_infra",))
-
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">CI / CD</p>', unsafe_allow_html=True)
-    st.radio("CI/CD", ["⚙️ Jenkins", "🔍 SonarQube", "🔀 ArgoCD"], key="nav_cicd",
-             label_visibility="collapsed", on_change=_nav, args=("nav_cicd",))
-
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Security</p>', unsafe_allow_html=True)
-    st.radio("Security", ["🛡️ Trivy Scanner", "🔐 Vault Secrets"], key="nav_sec",
-             label_visibility="collapsed", on_change=_nav, args=("nav_sec",))
-
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Observability</p>', unsafe_allow_html=True)
-    st.radio("Observability", ["📊 Prometheus & Grafana", "📜 Loki Logs"], key="nav_obs",
-             label_visibility="collapsed", on_change=_nav, args=("nav_obs",))
-
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Deployment</p>', unsafe_allow_html=True)
-    st.radio("Deployment", ["⛵ Helm Manager"], key="nav_dep",
-             label_visibility="collapsed", on_change=_nav, args=("nav_dep",))
-
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Storage & Registry</p>', unsafe_allow_html=True)
-    st.radio("Storage", ["📦 Container Registry", "🗄️ MinIO Storage", "🏛️ Nexus Repository"], key="nav_stor",
-             label_visibility="collapsed", on_change=_nav, args=("nav_stor",))
-
-    active_page = st.session_state["active_page"]
-
-    st.divider()
-
-    # ── Live service status + URL links ──────────────────────────────────────────
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 0.4rem 0;">🔌 MCP Tools & Services</p>', unsafe_allow_html=True)
-
-    _SERVICES = [
-        # (icon, name, port, url, host)
-        ("⚙️", "Jenkins",            30080, "http://localhost:30080",  "localhost"),
-        ("🔍", "SonarQube",          30900, "http://localhost:30900",  "localhost"),
-        ("📊", "Prometheus",         30090, "http://localhost:30090",  "localhost"),
-        ("📈", "Grafana",            30030, "http://localhost:30030",  "localhost"),
-        ("🔀", "ArgoCD",             30085, "https://localhost:30085", "localhost"),
-        ("🔐", "Vault",              30200, "http://localhost:30200",  "localhost"),
-        ("📜", "Loki",               30310, "http://localhost:30310",  "localhost"),
-        ("📦", "Container Registry", 30880, "http://localhost:30881",  "127.0.0.1"),
-        ("🗄️", "MinIO Console",      30921, "http://localhost:30921",  "localhost"),
-        ("🏛️", "Nexus",             30081, "http://localhost:30081",  "localhost"),
-        ("☸️", "Kubernetes",         0,     "",                        ""),
-        ("🐳", "Docker",             0,     "",                        ""),
-        ("🌍", "Terraform",          0,     "",                        ""),
-        ("🛡️", "Trivy",              0,     "",                        ""),
-        ("⛵", "Helm",               0,     "",                        ""),
+    # ── Single flat nav: all tools with live status ──────────────────────────────
+    # (page_name, port, url, host)
+    _NAV_ITEMS = [
+        ("🏠 Dashboard",             0,     "",                        ""),
+        ("⚙️ Jenkins",              30080, "http://localhost:30080",  "localhost"),
+        ("🔍 SonarQube",            30900, "http://localhost:30900",  "localhost"),
+        ("🔀 ArgoCD",               30085, "https://localhost:30085", "localhost"),
+        ("🛡️ Trivy Scanner",        0,     "",                        ""),
+        ("🔐 Vault Secrets",        30200, "http://localhost:30200",  "localhost"),
+        ("📊 Prometheus & Grafana", 30090, "http://localhost:30090",  "localhost"),
+        ("📜 Loki Logs",            30310, "http://localhost:30310",  "localhost"),
+        ("📦 Container Registry",   30880, "http://localhost:30881",  "127.0.0.1"),
+        ("🗄️ MinIO Storage",        30921, "http://localhost:30921",  "localhost"),
+        ("🏛️ Nexus Repository",     30081, "http://localhost:30081",  "localhost"),
+        ("☸️ Kubernetes",           0,     "",                        ""),
+        ("🐳 Docker",               0,     "",                        ""),
+        ("🌍 Terraform",            0,     "",                        ""),
+        ("⛵ Helm Manager",         0,     "",                        ""),
     ]
 
-    _svc_html = ""
-    for _ico, _name, _port, _url, _host in _SERVICES:
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.2rem 0 0.4rem 0;">MCP Tools & Services</p>', unsafe_allow_html=True)
+
+    for _page, _port, _url, _host in _NAV_ITEMS:
         if _port > 0:
-            _up = port_up(_port, host=_host if _host else "localhost")
-            _dot_cls = "dot-up" if _up else "dot-down"
-            _status = "UP" if _up else "DOWN"
-            _status_color = "#4caf50" if _up else "#f44336"
-            if _url:
-                _link = f'<a href="{_url}" target="_blank" style="color:#90caf9;text-decoration:none;font-size:0.72rem;">{_url.replace("http://","").replace("https://","")}</a>'
-            else:
-                _link = ""
+            _up = port_up(_port, host=_host or "localhost")
+            _dot = "🟢" if _up else "🔴"
         else:
-            _dot_cls = "dot-up"
-            _status = "CLI"
-            _status_color = "#78909c"
-            _link = ""
+            _dot = "🔵"
 
-        _svc_html += f"""
-        <div style="display:flex;align-items:center;justify-content:space-between;
-                    padding:3px 6px;margin:2px 0;border-radius:6px;
-                    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);">
-          <div style="display:flex;align-items:center;gap:5px;overflow:hidden;">
-            <span class="{_dot_cls}" style="flex-shrink:0;"></span>
-            <span style="font-size:0.82rem;color:#cfd8dc;white-space:nowrap;">{_ico} {_name}</span>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
-            <span style="font-size:0.65rem;font-weight:bold;color:{_status_color};">{_status}</span>
-            {f'<span style="font-size:0.62rem;">{_link}</span>' if _link else ""}
-          </div>
-        </div>"""
+        _label = f"{_dot}  {_page}"
+        if st.button(_label, key=f"nav_{_page}", use_container_width=True):
+            st.session_state["active_page"] = _page
+            st.rerun()
 
-    st.markdown(_svc_html, unsafe_allow_html=True)
+        # Show URL as a tiny link below web-service buttons
+        if _url:
+            _short = _url.replace("http://","").replace("https://","")
+            st.markdown(
+                f'<div style="margin:-6px 0 2px 28px;">'
+                f'<a href="{_url}" target="_blank" '
+                f'style="color:#546e7a;font-size:0.62rem;text-decoration:none;">{_short}</a>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    active_page = st.session_state["active_page"]
 
     st.divider()
     auto_refresh = st.toggle("⟳ Auto-refresh (30s)", value=False)
