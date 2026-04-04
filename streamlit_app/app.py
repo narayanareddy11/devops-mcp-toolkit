@@ -1,0 +1,658 @@
+"""
+DevOps MCP Toolkit — Streamlit Control Panel
+Visual interface for all 6 MCP servers.
+Run: streamlit run streamlit_app/app.py
+"""
+
+import streamlit as st
+import json
+import sys
+import time
+from pathlib import Path
+
+
+def show(result: dict, success_msg: str = None):
+    """Display success/error based on shell result dict {ok, out, err}."""
+    msg = success_msg or result.get("out") or "Done"
+    if result["ok"]:
+        st.success(msg)
+    else:
+        st.error(result.get("err") or result.get("out") or "Unknown error")
+
+sys.path.insert(0, str(Path(__file__).parent))
+from utils import (
+    docker, kube, tf, http_get, http_post, jenkins_crumb,
+    service_health, JENKINS_URL, SONAR_URL, JENKINS_AUTH, SONAR_AUTH, TF_WORKDIR,
+)
+
+# ── Page config ────────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="DevOps MCP Toolkit",
+    page_icon="🛠️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+st.sidebar.title("🛠️ DevOps MCP Toolkit")
+st.sidebar.caption("Control your local DevOps stack via MCP")
+
+page = st.sidebar.radio(
+    "Navigate",
+    ["🏠 Dashboard", "🐳 Docker", "☸️ Kubernetes", "⚙️ Jenkins", "🔍 SonarQube", "🌍 Terraform"],
+)
+
+st.sidebar.divider()
+st.sidebar.markdown("**Services**")
+st.sidebar.markdown(f"Jenkins → [localhost:30080]({JENKINS_URL})")
+st.sidebar.markdown(f"SonarQube → [localhost:30900]({SONAR_URL})")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 1 — DASHBOARD
+# ══════════════════════════════════════════════════════════════════════════════
+if page == "🏠 Dashboard":
+    st.title("🏠 DevOps Stack Dashboard")
+    st.caption("Live health status of all services")
+
+    if st.button("🔄 Refresh Health", type="primary"):
+        st.cache_data.clear()
+
+    @st.cache_data(ttl=15)
+    def get_health():
+        return service_health()
+
+    health = get_health()
+
+    # Status cards
+    col1, col2, col3, col4, col5 = st.columns(5)
+    def status_icon(up): return "🟢" if up else "🔴"
+
+    col1.metric("Docker",     health["docker"]["version"],     delta=status_icon(health["docker"]["up"]))
+    col2.metric("Jenkins",    f"{health['jenkins']['jobs']} jobs", delta=status_icon(health["jenkins"]["up"]))
+    col3.metric("SonarQube",  health["sonarqube"]["health"],   delta=status_icon(health["sonarqube"]["up"]))
+    col4.metric("Kubernetes", health["kubernetes"]["node"],    delta=status_icon(health["kubernetes"]["up"]))
+    col5.metric("Terraform",  health["terraform"]["version"],  delta=status_icon(health["terraform"]["up"]))
+
+    st.divider()
+
+    # Port status
+    st.subheader("Port Status")
+    pcols = st.columns(3)
+    for i, (name, open_) in enumerate(health["ports"].items()):
+        pcols[i].markdown(f"{'🟢' if open_ else '🔴'} **{name}** — {'Open' if open_ else 'Closed'}")
+
+    st.divider()
+
+    # K8s pods
+    st.subheader("☸️ K8s Pods — devops namespace")
+    pods = kube("get pods -o wide")
+    if pods["ok"]:
+        st.code(pods["out"], language="bash")
+    else:
+        st.error(pods["err"])
+
+    # Running containers
+    st.subheader("🐳 Running Docker Containers")
+    out = docker("ps --format json")
+    if out["ok"] and out["out"]:
+        containers = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
+        if containers:
+            st.dataframe(
+                [{"Name": c.get("Names"), "Image": c.get("Image"), "Status": c.get("Status")} for c in containers],
+                use_container_width=True,
+            )
+    else:
+        st.info("No running containers")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 2 — DOCKER
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🐳 Docker":
+    st.title("🐳 Docker Manager")
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Containers", "Images", "Volumes", "Actions"])
+
+    # ── Containers tab
+    with tab1:
+        st.subheader("All Containers")
+        show_all = st.toggle("Show stopped containers", value=True)
+        flag = "-a" if show_all else ""
+        out = docker(f"ps {flag} --format json")
+        if out["ok"] and out["out"]:
+            containers = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
+            df = [{"Name": c.get("Names"), "Image": c.get("Image"),
+                   "Status": c.get("Status"), "Ports": c.get("Ports", "")} for c in containers]
+            st.dataframe(df, use_container_width=True)
+
+            st.divider()
+            st.subheader("Container Actions")
+            names = [c.get("Names") for c in containers]
+            selected = st.selectbox("Select container", names)
+            c1, c2, c3, c4 = st.columns(4)
+            if c1.button("▶ Start"):
+                r = docker(f"start {selected}")
+                show(r)
+            if c2.button("⏹ Stop"):
+                r = docker(f"stop {selected}")
+                show(r)
+            if c3.button("🔄 Restart"):
+                r = docker(f"restart {selected}")
+                show(r)
+            if c4.button("📋 Logs"):
+                r = docker(f"logs --tail 50 {selected}")
+                st.code(r["out"] or r["err"], language="bash")
+
+            st.subheader("Container Stats")
+            if st.button("📊 Get Stats"):
+                r = docker(f"stats --no-stream --format json {selected}")
+                if r["ok"]:
+                    st.json(json.loads(r["out"]))
+
+        else:
+            st.info("No containers found")
+
+    # ── Images tab
+    with tab2:
+        st.subheader("Local Images")
+        out = docker("images --format json")
+        if out["ok"] and out["out"]:
+            images = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
+            st.dataframe(
+                [{"Repository": i.get("Repository"), "Tag": i.get("Tag"), "Size": i.get("Size"), "ID": i.get("ID", "")[:12]} for i in images],
+                use_container_width=True,
+            )
+        st.divider()
+        st.subheader("Pull Image")
+        img_name = st.text_input("Image name (e.g. nginx:latest)")
+        if st.button("⬇ Pull") and img_name:
+            with st.spinner(f"Pulling {img_name}..."):
+                r = docker(f"pull {img_name}")
+            show(r)
+
+    # ── Volumes tab
+    with tab3:
+        st.subheader("Volumes")
+        out = docker("volume ls --format json")
+        if out["ok"] and out["out"]:
+            vols = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
+            st.dataframe(
+                [{"Name": v.get("Name"), "Driver": v.get("Driver"), "Scope": v.get("Scope")} for v in vols],
+                use_container_width=True,
+            )
+
+    # ── Actions tab
+    with tab4:
+        st.subheader("Run New Container")
+        with st.form("run_container"):
+            image  = st.text_input("Image", value="nginx:latest")
+            name   = st.text_input("Container name (optional)")
+            ports  = st.text_input("Port mapping (e.g. 8081:80)")
+            detach = st.checkbox("Run detached", value=True)
+            submitted = st.form_submit_button("🚀 Run Container")
+            if submitted and image:
+                cmd = "run"
+                if detach: cmd += " -d"
+                if name:   cmd += f" --name {name}"
+                if ports:  cmd += f" -p {ports}"
+                cmd += f" {image}"
+                r = docker(cmd)
+                show(r, f"Started: {r['out']}")
+
+        st.divider()
+        st.subheader("System Prune")
+        st.warning("Removes stopped containers, unused images, and build cache.")
+        if st.button("🗑 Prune System"):
+            r = docker("system prune -f")
+            if r["ok"]:
+                st.code(r["out"])
+            else:
+                st.error(r["err"])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 3 — KUBERNETES
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "☸️ Kubernetes":
+    st.title("☸️ Kubernetes Manager")
+    st.caption("Namespace: **devops** | Cluster: **docker-desktop**")
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Pods", "Deployments", "Services & PVCs", "Events & Logs"])
+
+    with tab1:
+        st.subheader("Pods")
+        ns = st.text_input("Namespace", value="devops")
+        if st.button("🔄 Refresh Pods", key="refresh_pods"):
+            st.cache_data.clear()
+        out = kube("get pods -o wide", ns=ns)
+        st.code(out["out"] or out["err"], language="bash")
+
+        st.divider()
+        st.subheader("Pod Actions")
+        pod_out = kube("get pods -o jsonpath='{.items[*].metadata.name}'", ns=ns)
+        pod_names = pod_out["out"].strip("'").split() if pod_out["ok"] else []
+        if pod_names:
+            sel_pod = st.selectbox("Select pod", pod_names)
+            c1, c2 = st.columns(2)
+            if c1.button("🗑 Delete Pod (will restart)"):
+                r = kube(f"delete pod {sel_pod}", ns=ns)
+                show(r)
+            if c2.button("🔍 Describe Pod"):
+                r = kube(f"describe pod {sel_pod}", ns=ns)
+                st.code(r["out"], language="bash")
+
+    with tab2:
+        st.subheader("Deployments")
+        out = kube("get deployments", ns="devops")
+        st.code(out["out"] or out["err"], language="bash")
+
+        st.divider()
+        st.subheader("Scale Deployment")
+        dep_out = kube("get deployments -o jsonpath='{.items[*].metadata.name}'", ns="devops")
+        dep_names = dep_out["out"].strip("'").split() if dep_out["ok"] else []
+        if dep_names:
+            sel_dep = st.selectbox("Deployment", dep_names)
+            replicas = st.slider("Replicas", min_value=0, max_value=5, value=1)
+            if st.button("⚖️ Scale"):
+                r = kube(f"scale deployment {sel_dep} --replicas={replicas}", ns="devops")
+                show(r)
+
+            st.divider()
+            if st.button("🔄 Rollout Restart"):
+                r = kube(f"rollout restart deployment/{sel_dep}", ns="devops")
+                show(r)
+
+            if st.button("📋 Rollout Status"):
+                r = kube(f"rollout status deployment/{sel_dep}", ns="devops")
+                st.code(r["out"] or r["err"], language="bash")
+
+    with tab3:
+        st.subheader("Services")
+        out = kube("get services", ns="devops")
+        st.code(out["out"] or out["err"], language="bash")
+
+        st.subheader("PersistentVolumeClaims")
+        out = kube("get pvc", ns="devops")
+        st.code(out["out"] or out["err"], language="bash")
+
+    with tab4:
+        st.subheader("Recent Events")
+        out = kube("get events --sort-by=.lastTimestamp", ns="devops")
+        st.code(out["out"] or "No events", language="bash")
+
+        st.divider()
+        st.subheader("Pod Logs")
+        pod_out2 = kube("get pods -o jsonpath='{.items[*].metadata.name}'", ns="devops")
+        pod_names2 = pod_out2["out"].strip("'").split() if pod_out2["ok"] else []
+        if pod_names2:
+            sel_pod2 = st.selectbox("Pod", pod_names2, key="log_pod")
+            tail = st.slider("Tail lines", 10, 200, 50)
+            if st.button("📋 Fetch Logs"):
+                r = kube(f"logs {sel_pod2} --tail={tail}", ns="devops")
+                st.code(r["out"] or r["err"], language="bash")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 4 — JENKINS
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "⚙️ Jenkins":
+    st.title("⚙️ Jenkins Manager")
+    st.caption(f"Connected to: **{JENKINS_URL}**")
+
+    tab1, tab2, tab3 = st.tabs(["Jobs & Builds", "Create Job", "Nodes & Queue"])
+
+    with tab1:
+        st.subheader("All Jobs")
+        if st.button("🔄 Refresh", key="j_refresh"):
+            st.cache_data.clear()
+
+        data = http_get(f"{JENKINS_URL}/api/json", JENKINS_AUTH,
+                        params={"tree": "jobs[name,color,buildable]"})
+
+        if data:
+            jobs = data.get("jobs", [])
+            color_map = {"blue": "🟢", "red": "🔴", "notbuilt": "⚪", "disabled": "⛔", "yellow": "🟡"}
+            if jobs:
+                st.dataframe(
+                    [{"Status": color_map.get(j.get("color",""), "❓"),
+                      "Name": j["name"], "Buildable": j.get("buildable")} for j in jobs],
+                    use_container_width=True,
+                )
+
+                st.divider()
+                st.subheader("Build Actions")
+                job_names = [j["name"] for j in jobs]
+                sel_job = st.selectbox("Select job", job_names)
+
+                c1, c2, c3 = st.columns(3)
+                if c1.button("🚀 Trigger Build"):
+                    crumb = jenkins_crumb()
+                    status, _ = http_post(f"{JENKINS_URL}/job/{sel_job}/build", JENKINS_AUTH, headers=crumb)
+                    if status in (200, 201):
+                        st.success(f"Build triggered for **{sel_job}**")
+                    else:
+                        st.error(f"Failed (HTTP {status})")
+
+                if c2.button("📊 Build Status"):
+                    d = http_get(f"{JENKINS_URL}/job/{sel_job}/lastBuild/api/json", JENKINS_AUTH)
+                    if d:
+                        result_icon = {"SUCCESS": "🟢", "FAILURE": "🔴", "UNSTABLE": "🟡"}.get(d.get("result"), "⚪")
+                        st.metric("Result", f"{result_icon} {d.get('result', 'RUNNING')}", delta=f"Build #{d.get('number')}")
+                        st.json({"number": d.get("number"), "result": d.get("result"),
+                                 "building": d.get("building"), "durationMs": d.get("duration")})
+
+                if c3.button("📋 Console Log"):
+                    import httpx as _httpx
+                    try:
+                        r = _httpx.get(f"{JENKINS_URL}/job/{sel_job}/lastBuild/consoleText",
+                                       auth=JENKINS_AUTH, timeout=10)
+                        lines = r.text.splitlines()
+                        st.code("\n".join(lines[-80:]), language="bash")
+                    except Exception as e:
+                        st.error(str(e))
+
+                st.subheader(f"Recent Builds — {sel_job}")
+                builds_data = http_get(f"{JENKINS_URL}/job/{sel_job}/api/json", JENKINS_AUTH,
+                                       params={"tree": "builds[number,result,duration,building]{0,10}"})
+                if builds_data:
+                    builds = builds_data.get("builds", [])
+                    if builds:
+                        st.dataframe(builds, use_container_width=True)
+            else:
+                st.info("No jobs found. Create one in the **Create Job** tab.")
+        else:
+            st.error(f"Cannot connect to Jenkins at {JENKINS_URL}")
+
+    with tab2:
+        st.subheader("Create Freestyle Job")
+        with st.form("create_job"):
+            job_name    = st.text_input("Job name", value="new-job")
+            description = st.text_input("Description", value="Created via MCP Streamlit")
+            shell_cmd   = st.text_area("Shell command", value='echo "Hello from Jenkins K8s!"\ndate\nhostname')
+            submitted = st.form_submit_button("✅ Create Job")
+
+        if submitted and job_name:
+            config_xml = f"""<?xml version="1.1" encoding="UTF-8"?>
+<project>
+  <description>{description}</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/><scm class="hudson.scm.NullSCM"/>
+  <canRoam>true</canRoam><disabled>false</disabled>
+  <builders>
+    <hudson.tasks.Shell><command>{shell_cmd}</command></hudson.tasks.Shell>
+  </builders>
+  <publishers/><buildWrappers/>
+</project>""".encode("utf-8")
+            crumb = jenkins_crumb()
+            headers = {"Content-Type": "application/xml;charset=UTF-8", **crumb}
+            status, resp = http_post(f"{JENKINS_URL}/createItem?name={job_name}",
+                                     JENKINS_AUTH, content=config_xml, headers=headers)
+            if status in (200, 201):
+                st.success(f"✅ Job **{job_name}** created!")
+            else:
+                st.error(f"Failed HTTP {status}: {str(resp)[:200]}")
+
+    with tab3:
+        st.subheader("Build Nodes")
+        data = http_get(f"{JENKINS_URL}/computer/api/json", JENKINS_AUTH,
+                        params={"tree": "computer[displayName,offline,numExecutors,description]"})
+        if data:
+            nodes = data.get("computer", [])
+            st.dataframe(
+                [{"Node": n.get("displayName"), "Executors": n.get("numExecutors"),
+                  "Offline": n.get("offline")} for n in nodes],
+                use_container_width=True,
+            )
+
+        st.divider()
+        st.subheader("Build Queue")
+        q = http_get(f"{JENKINS_URL}/queue/api/json", JENKINS_AUTH)
+        if q:
+            items = q.get("items", [])
+            if items:
+                st.dataframe(
+                    [{"Job": i.get("task", {}).get("name"), "Why": i.get("why")} for i in items],
+                    use_container_width=True,
+                )
+            else:
+                st.success("Queue is empty")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 5 — SONARQUBE
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🔍 SonarQube":
+    st.title("🔍 SonarQube Manager")
+    st.caption(f"Connected to: **{SONAR_URL}**")
+
+    # Health check
+    health = http_get(f"{SONAR_URL}/api/system/health", SONAR_AUTH, timeout=5)
+    if health:
+        h = health.get("health", "UNKNOWN")
+        if h == "GREEN":
+            st.success(f"🟢 SonarQube Health: **{h}**")
+        else:
+            st.warning(f"⚠️ Health: {h}")
+    else:
+        st.error(f"🔴 SonarQube unreachable at {SONAR_URL}")
+        st.stop()
+
+    tab1, tab2, tab3, tab4 = st.tabs(["Projects", "Quality Gates", "Issues", "Tokens"])
+
+    with tab1:
+        st.subheader("Projects")
+        if st.button("🔄 Refresh Projects"):
+            st.cache_data.clear()
+
+        data = http_get(f"{SONAR_URL}/api/projects/search", SONAR_AUTH, params={"ps": 50})
+        components = data.get("components", []) if data else []
+
+        if components:
+            st.dataframe(
+                [{"Key": c["key"], "Name": c["name"],
+                  "Last Analysis": c.get("lastAnalysisDate", "never")} for c in components],
+                use_container_width=True,
+            )
+
+            st.divider()
+            st.subheader("Project Metrics")
+            proj_keys = [c["key"] for c in components]
+            sel_proj = st.selectbox("Select project", proj_keys)
+            if st.button("📊 Get Metrics"):
+                metrics = "bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc"
+                m_data = http_get(
+                    f"{SONAR_URL}/api/measures/component", SONAR_AUTH,
+                    params={"component": sel_proj, "metricKeys": metrics},
+                )
+                if m_data:
+                    measures = {m["metric"]: m.get("value", "N/A")
+                                for m in m_data.get("component", {}).get("measures", [])}
+                    cols = st.columns(len(measures))
+                    for i, (k, v) in enumerate(measures.items()):
+                        cols[i].metric(k.replace("_", " ").title(), v)
+
+            if st.button("🔒 Quality Gate Status"):
+                qg = http_get(f"{SONAR_URL}/api/qualitygates/project_status", SONAR_AUTH,
+                              params={"projectKey": sel_proj})
+                if qg:
+                    status = qg.get("projectStatus", {}).get("status", "NONE")
+                    icon = "🟢" if status == "OK" else "🔴" if status == "ERROR" else "⚪"
+                    st.metric("Quality Gate", f"{icon} {status}")
+        else:
+            st.info("No projects found.")
+
+        st.divider()
+        st.subheader("Create Project")
+        with st.form("create_project"):
+            pkey  = st.text_input("Project Key", value="my-app")
+            pname = st.text_input("Project Name", value="My Application")
+            submitted = st.form_submit_button("➕ Create Project")
+        if submitted and pkey:
+            status, resp = http_post(f"{SONAR_URL}/api/projects/create", SONAR_AUTH,
+                                     data={"project": pkey, "name": pname, "visibility": "public"})
+            if status == 200:
+                st.success(f"✅ Project **{pkey}** created!")
+            else:
+                st.error(f"Failed: {str(resp)[:200]}")
+
+    with tab2:
+        st.subheader("Quality Gates")
+        data = http_get(f"{SONAR_URL}/api/qualitygates/list", SONAR_AUTH)
+        if data:
+            gates = data.get("qualitygates", [])
+            st.dataframe(
+                [{"Name": g["name"], "Default": g.get("isDefault", False)} for g in gates],
+                use_container_width=True,
+            )
+
+    with tab3:
+        st.subheader("Open Issues")
+        data = http_get(f"{SONAR_URL}/api/projects/search", SONAR_AUTH, params={"ps": 50})
+        components = data.get("components", []) if data else []
+        if components:
+            sel_proj2 = st.selectbox("Project", [c["key"] for c in components], key="issue_proj")
+            severity  = st.selectbox("Severity", ["", "BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFO"])
+            itype     = st.selectbox("Type", ["", "BUG", "VULNERABILITY", "CODE_SMELL"])
+            if st.button("🔍 Search Issues"):
+                params = {"componentKeys": sel_proj2, "ps": 20, "resolved": "false"}
+                if severity: params["severities"] = severity
+                if itype:    params["types"] = itype
+                idata = http_get(f"{SONAR_URL}/api/issues/search", SONAR_AUTH, params=params)
+                if idata:
+                    issues = idata.get("issues", [])
+                    if issues:
+                        st.dataframe(
+                            [{"Type": i["type"], "Severity": i["severity"],
+                              "Message": i["message"][:80], "Line": i.get("line")} for i in issues],
+                            use_container_width=True,
+                        )
+                        st.caption(f"Total: {idata.get('total', 0)} issues")
+                    else:
+                        st.success("No open issues found!")
+
+    with tab4:
+        st.subheader("Generate User Token")
+        with st.form("gen_token"):
+            tname = st.text_input("Token name", value="my-scanner-token")
+            submitted = st.form_submit_button("🔑 Generate Token")
+        if submitted and tname:
+            status, resp = http_post(f"{SONAR_URL}/api/user_tokens/generate", SONAR_AUTH,
+                                     data={"name": tname, "login": "admin"})
+            if status == 200 and isinstance(resp, dict):
+                token_val = resp.get("token", "")
+                st.success("Token generated!")
+                st.code(token_val, language="text")
+                st.caption("⚠️ Copy this token now — it won't be shown again.")
+            else:
+                st.error(f"Failed: {str(resp)[:200]}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 6 — TERRAFORM
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "🌍 Terraform":
+    st.title("🌍 Terraform Manager")
+    st.caption(f"Workdir: `{TF_WORKDIR}`")
+
+    tab1, tab2, tab3 = st.tabs(["Plan & Apply", "State", "Workspaces"])
+
+    with tab1:
+        st.subheader("Variables")
+        col1, col2, col3, col4 = st.columns(4)
+        app_name    = col1.text_input("App Name",    value="my-devops-app")
+        environment = col2.selectbox("Environment",  ["dev", "staging", "prod"])
+        app_port    = col3.number_input("Port",       value=3000, min_value=1000, max_value=65535)
+        log_level   = col4.selectbox("Log Level",    ["debug", "info", "warn", "error"])
+
+        var_flags = (f'-var "app_name={app_name}" -var "environment={environment}" '
+                     f'-var "app_port={app_port}" -var "log_level={log_level}"')
+
+        c1, c2, c3, c4 = st.columns(4)
+        if c1.button("🔧 Init"):
+            with st.spinner("Running terraform init..."):
+                r = tf("terraform init -no-color")
+            st.code(f"{r['out']}\n{r['err']}", language="bash")
+
+        if c2.button("📋 Validate"):
+            r = tf("terraform validate -json")
+            try:
+                d = json.loads(r["out"])
+                if d.get("valid"):
+                    st.success("✅ Configuration is valid!")
+                else:
+                    st.error(f"Invalid: {d.get('diagnostics')}")
+            except Exception:
+                st.code(r["out"] or r["err"])
+
+        if c3.button("🔍 Plan"):
+            with st.spinner("Running terraform plan..."):
+                r = tf(f"terraform plan -no-color {var_flags}")
+            st.code(f"{r['out']}\n{r['err']}", language="bash")
+
+        if c4.button("🚀 Apply", type="primary"):
+            with st.spinner("Running terraform apply..."):
+                r = tf(f"terraform apply -no-color -auto-approve {var_flags}")
+            combined = f"{r['out']}\n{r['err']}"
+            if "Apply complete!" in combined:
+                st.success("✅ Apply complete!")
+            else:
+                st.error("Apply may have failed")
+            st.code(combined, language="bash")
+
+        st.divider()
+        if st.button("💥 Destroy", type="secondary"):
+            with st.spinner("Running terraform destroy..."):
+                r = tf(f"terraform destroy -no-color -auto-approve {var_flags}")
+            st.code(f"{r['out']}\n{r['err']}", language="bash")
+
+    with tab2:
+        st.subheader("State Resources")
+        if st.button("🔄 Refresh State"):
+            r = tf("terraform state list")
+            if r["ok"] and r["out"]:
+                resources = r["out"].splitlines()
+                st.write(f"**{len(resources)} resources tracked**")
+                for res in resources:
+                    st.code(res)
+            else:
+                st.info("State is empty — run Apply first.")
+
+        st.divider()
+        st.subheader("Outputs")
+        if st.button("📤 Show Outputs"):
+            r = tf("terraform output -json")
+            if r["ok"] and r["out"]:
+                try:
+                    data = json.loads(r["out"])
+                    for k, v in data.items():
+                        st.metric(k.replace("_", " ").title(), str(v.get("value"))[:60])
+                except Exception:
+                    st.code(r["out"])
+            else:
+                st.info("No outputs — run Apply first.")
+
+    with tab3:
+        st.subheader("Workspaces")
+        r = tf("terraform workspace list")
+        if r["ok"]:
+            lines = r["out"].splitlines()
+            current = next((l.replace("*", "").strip() for l in lines if "*" in l), "default")
+            st.info(f"Active workspace: **{current}**")
+            for line in lines:
+                icon = "✅" if "*" in line else "  "
+                st.markdown(f"{icon} `{line.replace('*','').strip()}`")
+
+        st.divider()
+        with st.form("new_workspace"):
+            ws_name = st.text_input("New workspace name")
+            submitted = st.form_submit_button("➕ Create Workspace")
+        if submitted and ws_name:
+            r = tf(f"terraform workspace new {ws_name}")
+            show(r, f"Workspace **{ws_name}** created!")
+
+        with st.form("select_workspace"):
+            sel_ws = st.text_input("Switch to workspace")
+            submitted2 = st.form_submit_button("🔀 Select Workspace")
+        if submitted2 and sel_ws:
+            r = tf(f"terraform workspace select {sel_ws}")
+            show(r, f"Switched to **{sel_ws}**")
