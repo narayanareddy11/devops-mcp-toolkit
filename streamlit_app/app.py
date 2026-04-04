@@ -82,23 +82,45 @@ if page == "🏠 Dashboard":
 
     health = get_health()
 
-    # Status cards
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # Status cards — row 1: core services
     def status_icon(up): return "🟢" if up else "🔴"
-
-    col1.metric("Docker",     health["docker"]["version"],     delta=status_icon(health["docker"]["up"]))
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Docker",     health["docker"]["version"],        delta=status_icon(health["docker"]["up"]))
     col2.metric("Jenkins",    f"{health['jenkins']['jobs']} jobs", delta=status_icon(health["jenkins"]["up"]))
-    col3.metric("SonarQube",  health["sonarqube"]["health"],   delta=status_icon(health["sonarqube"]["up"]))
-    col4.metric("Kubernetes", health["kubernetes"]["node"],    delta=status_icon(health["kubernetes"]["up"]))
-    col5.metric("Terraform",  health["terraform"]["version"],  delta=status_icon(health["terraform"]["up"]))
+    col3.metric("SonarQube",  health["sonarqube"]["health"],      delta=status_icon(health["sonarqube"]["up"]))
+    col4.metric("Kubernetes", health["kubernetes"]["node"],       delta=status_icon(health["kubernetes"]["up"]))
+    col5.metric("Terraform",  health["terraform"]["version"],     delta=status_icon(health["terraform"]["up"]))
+
+    # Status cards — row 2: observability + GitOps
+    import httpx as _hx
+    def _port_up(port):
+        import socket; s = socket.socket(); s.settimeout(2)
+        ok = s.connect_ex(("localhost", port)) == 0; s.close(); return ok
+
+    col6, col7, col8, col9 = st.columns(4)
+    prom_up = _port_up(30090)
+    col6.metric("Prometheus", "localhost:30090", delta=status_icon(prom_up))
+    graf_up = _port_up(30030)
+    col7.metric("Grafana", "localhost:30030", delta=status_icon(graf_up))
+    argo_up = _port_up(30085)
+    col8.metric("ArgoCD", "localhost:30085", delta=status_icon(argo_up))
+    import shutil as _sh
+    trivy_ok = bool(_sh.which("trivy"))
+    col9.metric("Trivy", "installed" if trivy_ok else "not installed", delta=status_icon(trivy_ok))
 
     st.divider()
 
     # Port status
     st.subheader("Port Status")
-    pcols = st.columns(3)
-    for i, (name, open_) in enumerate(health["ports"].items()):
-        pcols[i].markdown(f"{'🟢' if open_ else '🔴'} **{name}** — {'Open' if open_ else 'Closed'}")
+    all_ports = {
+        **health["ports"],
+        "Prometheus:30090": prom_up,
+        "Grafana:30030":    graf_up,
+        "ArgoCD:30085":     argo_up,
+    }
+    pcols = st.columns(len(all_ports))
+    for i, (name, open_) in enumerate(all_ports.items()):
+        pcols[i].markdown(f"{'🟢' if open_ else '🔴'} **{name}**")
 
     st.divider()
 
