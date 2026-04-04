@@ -10,6 +10,15 @@ import sys
 import time
 from pathlib import Path
 
+
+def show(result: dict, success_msg: str = None):
+    """Display success/error based on shell result dict {ok, out, err}."""
+    msg = success_msg or result.get("out") or "Done"
+    if result["ok"]:
+        st.success(msg)
+    else:
+        st.error(result.get("err") or result.get("out") or "Unknown error")
+
 sys.path.insert(0, str(Path(__file__).parent))
 from utils import (
     docker, kube, tf, http_get, http_post, jenkins_crumb,
@@ -123,13 +132,13 @@ elif page == "🐳 Docker":
             c1, c2, c3, c4 = st.columns(4)
             if c1.button("▶ Start"):
                 r = docker(f"start {selected}")
-                st.success(r["out"]) if r["ok"] else st.error(r["err"])
+                show(r)
             if c2.button("⏹ Stop"):
                 r = docker(f"stop {selected}")
-                st.success(r["out"]) if r["ok"] else st.error(r["err"])
+                show(r)
             if c3.button("🔄 Restart"):
                 r = docker(f"restart {selected}")
-                st.success(r["out"]) if r["ok"] else st.error(r["err"])
+                show(r)
             if c4.button("📋 Logs"):
                 r = docker(f"logs --tail 50 {selected}")
                 st.code(r["out"] or r["err"], language="bash")
@@ -159,7 +168,7 @@ elif page == "🐳 Docker":
         if st.button("⬇ Pull") and img_name:
             with st.spinner(f"Pulling {img_name}..."):
                 r = docker(f"pull {img_name}")
-            st.success(r["out"]) if r["ok"] else st.error(r["err"])
+            show(r)
 
     # ── Volumes tab
     with tab3:
@@ -188,14 +197,17 @@ elif page == "🐳 Docker":
                 if ports:  cmd += f" -p {ports}"
                 cmd += f" {image}"
                 r = docker(cmd)
-                st.success(f"Started: {r['out']}") if r["ok"] else st.error(r["err"])
+                show(r, f"Started: {r['out']}")
 
         st.divider()
         st.subheader("System Prune")
         st.warning("Removes stopped containers, unused images, and build cache.")
         if st.button("🗑 Prune System"):
             r = docker("system prune -f")
-            st.code(r["out"]) if r["ok"] else st.error(r["err"])
+            if r["ok"]:
+                st.code(r["out"])
+            else:
+                st.error(r["err"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -224,7 +236,7 @@ elif page == "☸️ Kubernetes":
             c1, c2 = st.columns(2)
             if c1.button("🗑 Delete Pod (will restart)"):
                 r = kube(f"delete pod {sel_pod}", ns=ns)
-                st.success(r["out"]) if r["ok"] else st.error(r["err"])
+                show(r)
             if c2.button("🔍 Describe Pod"):
                 r = kube(f"describe pod {sel_pod}", ns=ns)
                 st.code(r["out"], language="bash")
@@ -243,12 +255,12 @@ elif page == "☸️ Kubernetes":
             replicas = st.slider("Replicas", min_value=0, max_value=5, value=1)
             if st.button("⚖️ Scale"):
                 r = kube(f"scale deployment {sel_dep} --replicas={replicas}", ns="devops")
-                st.success(r["out"]) if r["ok"] else st.error(r["err"])
+                show(r)
 
             st.divider()
             if st.button("🔄 Rollout Restart"):
                 r = kube(f"rollout restart deployment/{sel_dep}", ns="devops")
-                st.success(r["out"]) if r["ok"] else st.error(r["err"])
+                show(r)
 
             if st.button("📋 Rollout Status"):
                 r = kube(f"rollout status deployment/{sel_dep}", ns="devops")
@@ -417,7 +429,10 @@ elif page == "🔍 SonarQube":
     health = http_get(f"{SONAR_URL}/api/system/health", SONAR_AUTH, timeout=5)
     if health:
         h = health.get("health", "UNKNOWN")
-        st.success(f"🟢 SonarQube Health: **{h}**") if h == "GREEN" else st.warning(f"⚠️ Health: {h}")
+        if h == "GREEN":
+            st.success(f"🟢 SonarQube Health: **{h}**")
+        else:
+            st.warning(f"⚠️ Health: {h}")
     else:
         st.error(f"🔴 SonarQube unreachable at {SONAR_URL}")
         st.stop()
@@ -633,11 +648,11 @@ elif page == "🌍 Terraform":
             submitted = st.form_submit_button("➕ Create Workspace")
         if submitted and ws_name:
             r = tf(f"terraform workspace new {ws_name}")
-            st.success(f"Workspace **{ws_name}** created!") if r["ok"] else st.error(r["err"])
+            show(r, f"Workspace **{ws_name}** created!")
 
         with st.form("select_workspace"):
             sel_ws = st.text_input("Switch to workspace")
             submitted2 = st.form_submit_button("🔀 Select Workspace")
         if submitted2 and sel_ws:
             r = tf(f"terraform workspace select {sel_ws}")
-            st.success(f"Switched to **{sel_ws}**") if r["ok"] else st.error(r["err"])
+            show(r, f"Switched to **{sel_ws}**")

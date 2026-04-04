@@ -12,6 +12,20 @@
 
 ---
 
+## Streamlit Control Panel
+
+> Visual browser UI to control all 6 MCP servers — run with `python3 -m streamlit run streamlit_app/app.py`
+
+| Dashboard | Docker Manager |
+|-----------|---------------|
+| ![Dashboard](docs/screenshots/01_dashboard.png) | ![Docker](docs/screenshots/02_docker.png) |
+
+| Jenkins Manager | SonarQube Manager |
+|----------------|------------------|
+| ![Jenkins](docs/screenshots/03_jenkins.png) | ![SonarQube](docs/screenshots/04_sonarqube.png) |
+
+---
+
 ## What It Does
 
 This toolkit exposes your entire local DevOps stack as MCP tools that Claude can call directly. Instead of switching between terminals and UIs, you interact with Jenkins, SonarQube, Docker, Terraform, and Kubernetes through natural language.
