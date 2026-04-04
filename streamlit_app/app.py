@@ -1,5 +1,5 @@
 """
-DevOps MCP Toolkit — Streamlit Control Panel
+DevOps MCP Toolkit — Streamlit Control Panel v2.0.0
 Visual interface for all 15 MCP servers.
 Run: streamlit run streamlit_app/app.py
 """
@@ -9,38 +9,34 @@ import json
 import subprocess
 import sys
 import time
+import socket
+import shutil
 from pathlib import Path
 
-
-def show(result: dict, success_msg: str = None):
-    """Display success/error based on shell result dict {ok, out, err}."""
-    msg = success_msg or result.get("out") or "Done"
-    if result["ok"]:
-        st.success(msg)
-    else:
-        st.error(result.get("err") or result.get("out") or "Unknown error")
-
+# ── Path setup ─────────────────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
 from utils import (
-    docker, kube, tf, http_get, http_post, jenkins_crumb,
+    docker, kube, tf, http_get, http_post, jenkins_crumb, shell, shell_lines,
     service_health, JENKINS_URL, SONAR_URL, JENKINS_AUTH, SONAR_AUTH, TF_WORKDIR,
 )
 
-PROM_URL    = "http://localhost:30090"
-GRAFANA_URL = "http://localhost:30030"
-GRAFANA_AUTH = ("admin", "Admin@123456789@")
-ARGOCD_URL  = "https://localhost:30085"
-VAULT_URL   = "http://localhost:30200"
-VAULT_TOKEN = "root"
-LOKI_URL    = "http://localhost:30310"
-REGISTRY_URL = "http://127.0.0.1:30880"
-REGISTRY_UI_URL = "http://127.0.0.1:30881"
-MINIO_URL   = "http://localhost:30920"
+# ── Service config ──────────────────────────────────────────────────────────────
+PROM_URL          = "http://localhost:30090"
+GRAFANA_URL       = "http://localhost:30030"
+GRAFANA_AUTH      = ("admin", "Admin@123456789@")
+ARGOCD_URL        = "https://localhost:30085"
+ARGOCD_AUTH       = ("admin", "Admin@123456789@")
+VAULT_URL         = "http://localhost:30200"
+VAULT_TOKEN       = "root"
+LOKI_URL          = "http://localhost:30310"
+REGISTRY_URL      = "http://127.0.0.1:30880"
+REGISTRY_UI_URL   = "http://127.0.0.1:30881"
+MINIO_URL         = "http://localhost:30920"
 MINIO_CONSOLE_URL = "http://localhost:30921"
-NEXUS_URL   = "http://localhost:30081"
-NEXUS_AUTH  = ("admin", "Admin@123456789@")
+NEXUS_URL         = "http://localhost:30081"
+NEXUS_AUTH        = ("admin", "Admin@123456789@")
 
-# ── Page config ────────────────────────────────────────────────────────────────
+# ── Page config ─────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="DevOps MCP Toolkit",
     page_icon="🛠️",
@@ -48,230 +44,603 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
-st.sidebar.title("🛠️ DevOps MCP Toolkit")
-st.sidebar.caption("Control your local DevOps stack via MCP")
+# ── Custom CSS ──────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Hide streamlit branding */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
 
-page = st.sidebar.radio(
-    "Navigate",
-    [
-        "🏠 Dashboard",
-        "🐳 Docker",
-        "☸️ Kubernetes",
-        "⚙️ Jenkins",
-        "🔍 SonarQube",
-        "🌍 Terraform",
-        "📊 Prometheus & Grafana",
-        "🔀 ArgoCD",
-        "🛡️ Trivy Scanner",
-        "⛵ Helm Manager",
-        "🔐 Vault Secrets",
-        "📜 Loki Logs",
-        "📦 Container Registry",
-        "🗄️ MinIO Storage",
-        "🏛️ Nexus Repository",
-    ],
-)
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0d1b2a 0%, #1a2a3a 100%);
+}
+[data-testid="stSidebar"] * { color: #e0e0e0 !important; }
+[data-testid="stSidebar"] .stRadio label { color: #b0c4de !important; font-size: 0.9rem; }
 
-st.sidebar.divider()
-st.sidebar.markdown("**🔧 Core Services**")
-st.sidebar.markdown(f"[🔧 Jenkins](http://localhost:30080) · [🔍 SonarQube](http://localhost:30900)")
-st.sidebar.markdown(f"[📊 Grafana](http://localhost:30030) · [📈 Prometheus](http://localhost:30090)")
-st.sidebar.markdown(f"[🔀 ArgoCD](https://localhost:30085)")
-st.sidebar.divider()
-st.sidebar.markdown("**🆕 New Services**")
-st.sidebar.markdown(f"[🔐 Vault](http://localhost:30200) · [📜 Loki](http://localhost:30310)")
-st.sidebar.markdown(f"[📦 Registry](http://127.0.0.1:30881) · [🗄️ MinIO](http://localhost:30921)")
-st.sidebar.markdown(f"[🏛️ Nexus](http://localhost:30081)")
-st.sidebar.divider()
-st.sidebar.caption("admin / Admin@123456789@")
+/* Page header card */
+.page-header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #0e2440 100%);
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid #4fc3f7;
+}
+.page-header h1 { color: white; margin: 0; font-size: 1.8rem; }
+.page-header p { color: #90caf9; margin: 0.3rem 0 0 0; }
+
+/* Service cards */
+.service-card {
+    background: #1e2a3a;
+    border: 1px solid #2d3f55;
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 0.5rem;
+    height: 100%;
+}
+.service-card-up   { border-left: 4px solid #4caf50; }
+.service-card-down { border-left: 4px solid #f44336; }
+.card-title   { font-size: 0.85rem; color: #90caf9; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+.card-value   { font-size: 1.4rem; font-weight: bold; color: #ffffff; margin-bottom: 0.2rem; }
+.card-subtitle{ font-size: 0.78rem; color: #78909c; }
+.status-up    { color: #4caf50; font-weight: bold; }
+.status-down  { color: #f44336; font-weight: bold; }
+
+/* Status badges */
+.badge-up {
+    background: #1b5e20; color: #a5d6a7;
+    padding: 2px 10px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: bold; display: inline-block;
+}
+.badge-down {
+    background: #b71c1c; color: #ffcdd2;
+    padding: 2px 10px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: bold; display: inline-block;
+}
+.badge-warn {
+    background: #e65100; color: #ffe0b2;
+    padding: 2px 10px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: bold; display: inline-block;
+}
+.badge-info {
+    background: #0d47a1; color: #bbdefb;
+    padding: 2px 10px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: bold; display: inline-block;
+}
+
+/* Metric gradient card */
+.metric-card {
+    background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+    border-radius: 10px; padding: 1rem 1.2rem;
+    text-align: center; height: 100%;
+}
+.metric-card .value { font-size: 2rem; font-weight: bold; color: #fff; }
+.metric-card .label { font-size: 0.8rem; color: #9fa8da; text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Status dot */
+.dot-up   { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; margin-right: 6px; }
+.dot-down { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f44336; margin-right: 6px; }
+</style>
+""", unsafe_allow_html=True)
+
+# ── Helper functions ────────────────────────────────────────────────────────────
+def port_up(port, host="localhost"):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(1.5)
+    ok = s.connect_ex((host, port)) == 0
+    s.close()
+    return ok
+
+def http_json(url, auth=None, params=None, timeout=6):
+    import httpx
+    try:
+        r = httpx.get(url, auth=auth, params=params, timeout=timeout,
+                      follow_redirects=True, verify=False)
+        if r.status_code < 400:
+            return r.json()
+    except Exception:
+        pass
+    return None
+
+def badge(text, style="up"):
+    return f'<span class="badge-{style}">{text}</span>'
+
+def status_badge(up, up_text="UP", down_text="DOWN"):
+    return badge(up_text, "up") if up else badge(down_text, "down")
+
+def show(result, success_msg=None):
+    msg = success_msg or result.get("out") or "Done"
+    if result["ok"]:
+        st.success(msg)
+    else:
+        st.error(result.get("err") or result.get("out") or "Unknown error")
+
+def page_header(icon, title, subtitle):
+    st.markdown(f"""<div class="page-header">
+      <h1>{icon} {title}</h1>
+      <p>{subtitle}</p>
+    </div>""", unsafe_allow_html=True)
+
+def service_card(title, value, subtitle, up=True):
+    card_class = "service-card-up" if up else "service-card-down"
+    return f"""<div class="service-card {card_class}">
+      <div class="card-title">{title}</div>
+      <div class="card-value">{value}</div>
+      <div class="card-subtitle">{subtitle}</div>
+    </div>"""
+
+# ── Sidebar ─────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("""
+    <div style="text-align:center;padding:1rem 0 0.5rem 0;">
+      <div style="font-size:2rem;">🛠️</div>
+      <div style="font-size:1.1rem;font-weight:bold;color:#e0e0e0;">DevOps MCP Toolkit</div>
+      <div style="font-size:0.7rem;color:#78909c;margin-top:0.2rem;">v2.0.0 | 15 MCP Servers</div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.divider()
+
+    # ── Navigation (session-state driven so each group is independent) ──────────
+    def _nav(key):
+        st.session_state["active_page"] = st.session_state[key]
+
+    # Support ?page=<slug> URL param (used by screenshot automation)
+    _PAGE_MAP = {
+        "dashboard":   "🏠 Dashboard",
+        "docker":      "🐳 Docker",
+        "kubernetes":  "☸️ Kubernetes",
+        "terraform":   "🌍 Terraform",
+        "jenkins":     "⚙️ Jenkins",
+        "sonarqube":   "🔍 SonarQube",
+        "argocd":      "🔀 ArgoCD",
+        "trivy":       "🛡️ Trivy Scanner",
+        "vault":       "🔐 Vault Secrets",
+        "prometheus":  "📊 Prometheus & Grafana",
+        "loki":        "📜 Loki Logs",
+        "helm":        "⛵ Helm Manager",
+        "registry":    "📦 Container Registry",
+        "minio":       "🗄️ MinIO Storage",
+        "nexus":       "🏛️ Nexus Repository",
+    }
+    _qp = st.query_params.get("page", "")
+    if _qp and _qp in _PAGE_MAP:
+        st.session_state["active_page"] = _PAGE_MAP[_qp]
+
+    if "active_page" not in st.session_state:
+        st.session_state["active_page"] = "🏠 Dashboard"
+
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.5rem 0 0.3rem 0;">Overview</p>', unsafe_allow_html=True)
+    st.radio("Overview", ["🏠 Dashboard"], key="nav_overview",
+             label_visibility="collapsed", on_change=_nav, args=("nav_overview",))
+
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Infrastructure</p>', unsafe_allow_html=True)
+    st.radio("Infrastructure", ["🐳 Docker", "☸️ Kubernetes", "🌍 Terraform"], key="nav_infra",
+             label_visibility="collapsed", on_change=_nav, args=("nav_infra",))
+
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">CI / CD</p>', unsafe_allow_html=True)
+    st.radio("CI/CD", ["⚙️ Jenkins", "🔍 SonarQube", "🔀 ArgoCD"], key="nav_cicd",
+             label_visibility="collapsed", on_change=_nav, args=("nav_cicd",))
+
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Security</p>', unsafe_allow_html=True)
+    st.radio("Security", ["🛡️ Trivy Scanner", "🔐 Vault Secrets"], key="nav_sec",
+             label_visibility="collapsed", on_change=_nav, args=("nav_sec",))
+
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Observability</p>', unsafe_allow_html=True)
+    st.radio("Observability", ["📊 Prometheus & Grafana", "📜 Loki Logs"], key="nav_obs",
+             label_visibility="collapsed", on_change=_nav, args=("nav_obs",))
+
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Deployment</p>', unsafe_allow_html=True)
+    st.radio("Deployment", ["⛵ Helm Manager"], key="nav_dep",
+             label_visibility="collapsed", on_change=_nav, args=("nav_dep",))
+
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">Storage & Registry</p>', unsafe_allow_html=True)
+    st.radio("Storage", ["📦 Container Registry", "🗄️ MinIO Storage", "🏛️ Nexus Repository"], key="nav_stor",
+             label_visibility="collapsed", on_change=_nav, args=("nav_stor",))
+
+    active_page = st.session_state["active_page"]
+
+    st.divider()
+
+    # Live service status dots
+    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 0.5rem 0;">Service Status</p>', unsafe_allow_html=True)
+    _svc_ports = [
+        ("Jenkins", 30080), ("SonarQube", 30900), ("Prometheus", 30090),
+        ("Grafana", 30030), ("ArgoCD", 30085), ("Vault", 30200),
+        ("Loki", 30310), ("MinIO", 30920), ("Nexus", 30081),
+    ]
+    _dot_rows = ""
+    for _svc, _port in _svc_ports:
+        _up = port_up(_port)
+        _dot = "dot-up" if _up else "dot-down"
+        _dot_rows += f'<div style="padding:1px 0;font-size:0.8rem;"><span class="{_dot}"></span>{_svc}</div>'
+    st.markdown(_dot_rows, unsafe_allow_html=True)
+
+    st.divider()
+    auto_refresh = st.toggle("⟳ Auto-refresh (30s)", value=False)
+    if st.button("🚪 Logout", use_container_width=True):
+        st.session_state.logged_in = False
+        st.rerun()
+
+if auto_refresh:
+    time.sleep(30)
+    st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 1 — DASHBOARD
 # ══════════════════════════════════════════════════════════════════════════════
-if page == "🏠 Dashboard":
-    st.title("🏠 DevOps Stack Dashboard")
-    st.caption("Live health status of all services")
+if active_page == "🏠 Dashboard":
+    page_header("🏠", "DevOps Stack Dashboard", "Live health status of all 15 services running on Kubernetes")
 
-    if st.button("🔄 Refresh Health", type="primary"):
-        st.cache_data.clear()
+    col_refresh, col_clear, _ = st.columns([1, 1, 5])
+    with col_refresh:
+        if st.button("🔄 Refresh", type="primary"):
+            st.cache_data.clear()
+            st.rerun()
 
-    @st.cache_data(ttl=15)
-    def get_health():
-        return service_health()
+    # ── Cached data loaders ──────────────────────────────────────────────────
+    @st.cache_data(ttl=30)
+    def dash_jenkins():
+        data = http_json(f"{JENKINS_URL}/api/json", auth=JENKINS_AUTH)
+        up = data is not None
+        jobs = len(data.get("jobs", [])) if data else 0
+        return up, jobs
 
-    health = get_health()
+    @st.cache_data(ttl=30)
+    def dash_sonar():
+        data = http_json(f"{SONAR_URL}/api/projects/search", auth=SONAR_AUTH)
+        up = data is not None
+        count = data.get("paging", {}).get("total", 0) if data else 0
+        return up, count
 
-    # Status cards — row 1: core services
-    def status_icon(up): return "🟢" if up else "🔴"
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Docker",     health["docker"]["version"],        delta=status_icon(health["docker"]["up"]))
-    col2.metric("Jenkins",    f"{health['jenkins']['jobs']} jobs", delta=status_icon(health["jenkins"]["up"]))
-    col3.metric("SonarQube",  health["sonarqube"]["health"],      delta=status_icon(health["sonarqube"]["up"]))
-    col4.metric("Kubernetes", health["kubernetes"]["node"],       delta=status_icon(health["kubernetes"]["up"]))
-    col5.metric("Terraform",  health["terraform"]["version"],     delta=status_icon(health["terraform"]["up"]))
+    @st.cache_data(ttl=30)
+    def dash_k8s_pods(ns="devops"):
+        r = kube(f"get pods --no-headers", ns=ns)
+        if r["ok"] and r["out"]:
+            return True, len([l for l in r["out"].splitlines() if l.strip()])
+        return False, 0
 
-    # Status cards — row 2: observability + GitOps
-    def _port_up(port, ipv4=False):
-        import socket
-        host = "127.0.0.1" if ipv4 else "localhost"
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(2)
-        ok = s.connect_ex((host, port)) == 0
-        s.close()
-        return ok
+    @st.cache_data(ttl=30)
+    def dash_grafana():
+        data = http_json(f"{GRAFANA_URL}/api/datasources", auth=GRAFANA_AUTH)
+        up = data is not None
+        count = len(data) if data else 0
+        return up, count
 
-    import shutil as _sh
-    col6, col7, col8, col9 = st.columns(4)
-    prom_up  = _port_up(30090)
-    col6.metric("Prometheus", ":30090", delta=status_icon(prom_up))
-    graf_up  = _port_up(30030)
-    col7.metric("Grafana", ":30030", delta=status_icon(graf_up))
-    argo_up  = _port_up(30085)
-    col8.metric("ArgoCD", ":30085", delta=status_icon(argo_up))
-    trivy_ok = bool(_sh.which("trivy"))
-    col9.metric("Trivy", "installed" if trivy_ok else "missing", delta=status_icon(trivy_ok))
+    @st.cache_data(ttl=30)
+    def dash_argocd():
+        import httpx
+        try:
+            auth_r = httpx.post(f"{ARGOCD_URL}/api/v1/session",
+                                json={"username": "admin", "password": "Admin@123456789@"},
+                                timeout=6, verify=False)
+            if auth_r.status_code == 200:
+                token = auth_r.json().get("token", "")
+                apps_r = httpx.get(f"{ARGOCD_URL}/api/v1/applications",
+                                   headers={"Authorization": f"Bearer {token}"},
+                                   timeout=6, verify=False)
+                if apps_r.status_code == 200:
+                    apps = apps_r.json().get("items", []) or []
+                    return True, len(apps)
+        except Exception:
+            pass
+        return False, 0
 
-    # Row 3: new services
+    @st.cache_data(ttl=30)
+    def dash_prometheus():
+        data = http_json(f"{PROM_URL}/api/v1/targets")
+        if data and data.get("status") == "success":
+            active = data.get("data", {}).get("activeTargets", [])
+            return True, len(active)
+        return port_up(30090), 0
+
+    @st.cache_data(ttl=30)
+    def dash_vault():
+        data = http_json(f"{VAULT_URL}/v1/sys/health")
+        if data:
+            sealed = data.get("sealed", True)
+            return True, "Sealed" if sealed else "Unsealed"
+        return port_up(30200), "Unknown"
+
+    @st.cache_data(ttl=30)
+    def dash_loki():
+        data = http_json(f"{LOKI_URL}/ready")
+        up = port_up(30310)
+        return up, "Ready" if up else "Unreachable"
+
+    @st.cache_data(ttl=30)
+    def dash_nexus():
+        data = http_json(f"{NEXUS_URL}/service/rest/v1/repositories", auth=NEXUS_AUTH)
+        up = data is not None
+        count = len(data) if data else 0
+        return up, count
+
+    # ── Row 1: Core services (5 cols) ─────────────────────────────────────────
+    st.markdown("#### Core Services")
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    jen_up, jen_jobs = dash_jenkins()
+    c1.markdown(service_card("Jenkins", f"{jen_jobs} Jobs", "CI/CD Server · :30080", jen_up), unsafe_allow_html=True)
+
+    son_up, son_proj = dash_sonar()
+    c2.markdown(service_card("SonarQube", f"{son_proj} Projects", "Code Quality · :30900", son_up), unsafe_allow_html=True)
+
+    k8s_up, k8s_pods = dash_k8s_pods()
+    c3.markdown(service_card("Kubernetes", f"{k8s_pods} Pods", "devops namespace", k8s_up), unsafe_allow_html=True)
+
+    graf_up, graf_ds = dash_grafana()
+    c4.markdown(service_card("Grafana", f"{graf_ds} Datasources", "Visualization · :30030", graf_up), unsafe_allow_html=True)
+
+    argo_up, argo_apps = dash_argocd()
+    c5.markdown(service_card("ArgoCD", f"{argo_apps} Apps", "GitOps · :30085", argo_up), unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # ── Row 2: Observability + extras (5 cols) ─────────────────────────────────
+    st.markdown("#### Observability & Storage")
+    c6, c7, c8, c9, c10 = st.columns(5)
+
+    prom_up, prom_tgts = dash_prometheus()
+    c6.markdown(service_card("Prometheus", f"{prom_tgts} Targets", "Metrics · :30090", prom_up), unsafe_allow_html=True)
+
+    vault_up, vault_state = dash_vault()
+    c7.markdown(service_card("Vault", vault_state, "Secrets · :30200", vault_up), unsafe_allow_html=True)
+
+    loki_up, loki_state = dash_loki()
+    c8.markdown(service_card("Loki", loki_state, "Logs · :30310", loki_up), unsafe_allow_html=True)
+
+    minio_up = port_up(30920)
+    c9.markdown(service_card("MinIO", "UP" if minio_up else "DOWN", "Object Storage · :30920", minio_up), unsafe_allow_html=True)
+
+    nex_up, nex_repos = dash_nexus()
+    c10.markdown(service_card("Nexus", f"{nex_repos} Repos" if nex_repos else "UP" if nex_up else "DOWN", "Artifacts · :30081", nex_up), unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # ── Row 3: Quick actions ──────────────────────────────────────────────────
+    st.markdown("#### Quick Actions")
+    qa1, qa2, qa3, qa4, qa5 = st.columns(5)
+
+    with qa1:
+        if st.button("🔄 Restart All Pods", use_container_width=True):
+            with st.spinner("Restarting deployments..."):
+                dep_r = kube("get deployments -o jsonpath='{.items[*].metadata.name}'", ns="devops")
+                if dep_r["ok"] and dep_r["out"]:
+                    deps = dep_r["out"].strip("'").split()
+                    for d in deps:
+                        kube(f"rollout restart deployment/{d}", ns="devops")
+                    st.success(f"Restarted {len(deps)} deployment(s)")
+                else:
+                    st.warning("No deployments found in devops namespace")
+
+    with qa2:
+        st.link_button("📊 Open Grafana", GRAFANA_URL, use_container_width=True)
+
+    with qa3:
+        if st.button("🔀 Sync ArgoCD Apps", use_container_width=True):
+            st.info(f"ArgoCD has {argo_apps} app(s). Use ArgoCD page for sync.")
+
+    with qa4:
+        if st.button("🧹 Docker Prune", use_container_width=True):
+            with st.spinner("Pruning Docker system..."):
+                r = docker("system prune -f")
+            show(r, "Docker system pruned successfully")
+
+    with qa5:
+        st.link_button("🔧 Open Jenkins", JENKINS_URL, use_container_width=True)
+
     st.divider()
-    st.subheader("🆕 New Services")
-    col10, col11, col12, col13, col14, col15 = st.columns(6)
-    vault_up   = _port_up(30200)
-    col10.metric("Vault",    ":30200", delta=status_icon(vault_up))
-    loki_up    = _port_up(30310)
-    col11.metric("Loki",     ":30310", delta=status_icon(loki_up))
-    reg_up     = _port_up(30880, ipv4=True)
-    col12.metric("Registry", ":30880", delta=status_icon(reg_up))
-    minio_up   = _port_up(30920)
-    col13.metric("MinIO",    ":30920", delta=status_icon(minio_up))
-    nexus_up   = _port_up(30081)
-    col14.metric("Nexus",    ":30081", delta=status_icon(nexus_up))
-    helm_ok    = bool(_sh.which("helm"))
-    col15.metric("Helm",     "installed" if helm_ok else "missing", delta=status_icon(helm_ok))
+
+    # ── Row 4: K8s pods table + Jenkins builds ─────────────────────────────────
+    left_col, right_col = st.columns(2)
+
+    with left_col:
+        st.markdown("##### ☸️ K8s Pods — devops namespace")
+
+        @st.cache_data(ttl=30)
+        def get_pods_table():
+            r = kube("get pods -o wide --no-headers", ns="devops")
+            rows = []
+            if r["ok"] and r["out"]:
+                for line in r["out"].splitlines():
+                    parts = line.split()
+                    if len(parts) >= 4:
+                        rows.append({
+                            "Name":    parts[0],
+                            "Status":  parts[2],
+                            "Ready":   parts[1],
+                            "Restarts": parts[3],
+                            "Age":     parts[4] if len(parts) > 4 else "",
+                            "Node":    parts[6] if len(parts) > 6 else "",
+                        })
+            return rows
+
+        pods_rows = get_pods_table()
+        if pods_rows:
+            import pandas as pd
+            df_pods = pd.DataFrame(pods_rows)
+            st.dataframe(df_pods, use_container_width=True, hide_index=True)
+        else:
+            st.info("No pods found in devops namespace — check if cluster is running")
+
+    with right_col:
+        st.markdown("##### ⚙️ Recent Jenkins Builds")
+
+        @st.cache_data(ttl=30)
+        def get_jenkins_builds():
+            jobs_data = http_json(f"{JENKINS_URL}/api/json?tree=jobs[name,lastBuild[number,result,timestamp,duration]]", auth=JENKINS_AUTH)
+            builds = []
+            if jobs_data:
+                for job in (jobs_data.get("jobs") or [])[:10]:
+                    lb = job.get("lastBuild") or {}
+                    if lb:
+                        builds.append({
+                            "Job":      job.get("name", ""),
+                            "Build #":  lb.get("number", ""),
+                            "Result":   lb.get("result") or "BUILDING",
+                            "Duration": f"{int(lb.get('duration', 0)/1000)}s",
+                        })
+            return builds
+
+        jbuilds = get_jenkins_builds()
+        if jbuilds:
+            import pandas as pd
+            df_builds = pd.DataFrame(jbuilds[:8])
+            st.dataframe(df_builds, use_container_width=True, hide_index=True)
+        else:
+            st.info("Jenkins unreachable or no builds found")
 
     st.divider()
 
-    # Port status — all services
-    st.subheader("Port Status — All Services")
-    all_ports = {
-        "Jenkins:30080":    health["ports"].get("Jenkins:30080", False),
-        "SonarQube:30900":  health["ports"].get("SonarQube:30900", False),
-        "Prometheus:30090": prom_up,
-        "Grafana:30030":    graf_up,
-        "ArgoCD:30085":     argo_up,
-        "Vault:30200":      vault_up,
-        "Loki:30310":       loki_up,
-        "Registry:30880":   reg_up,
-        "MinIO:30920":      minio_up,
-        "Nexus:30081":      nexus_up,
-    }
-    pcols = st.columns(5)
-    for i, (name, open_) in enumerate(all_ports.items()):
-        pcols[i % 5].markdown(f"{'🟢' if open_ else '🔴'} **{name}**")
+    # ── Row 5: Prometheus metrics chart ───────────────────────────────────────
+    st.markdown("##### 📈 Pod Resource Usage (Prometheus)")
 
-    st.divider()
+    @st.cache_data(ttl=60)
+    def get_prom_metrics():
+        cpu_data = http_json(f"{PROM_URL}/api/v1/query",
+                             params={"query": 'sum(rate(container_cpu_usage_seconds_total{namespace="devops",container!=""}[5m])) by (pod)'})
+        mem_data = http_json(f"{PROM_URL}/api/v1/query",
+                             params={"query": 'sum(container_memory_working_set_bytes{namespace="devops",container!=""}) by (pod)'})
+        return cpu_data, mem_data
 
-    # K8s pods
-    st.subheader("☸️ K8s Pods — devops namespace")
-    pods = kube("get pods -o wide")
-    if pods["ok"]:
-        st.code(pods["out"], language="bash")
+    if prom_up:
+        try:
+            cpu_data, mem_data = get_prom_metrics()
+            import pandas as pd
+
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                if cpu_data and cpu_data.get("status") == "success":
+                    results = cpu_data["data"]["result"]
+                    if results:
+                        cpu_df = pd.DataFrame({
+                            r["metric"].get("pod", "unknown"): [float(r["value"][1])]
+                            for r in results
+                        })
+                        st.markdown("**CPU Usage (cores)**")
+                        st.bar_chart(cpu_df.T, use_container_width=True)
+                    else:
+                        st.info("No CPU data from Prometheus yet")
+                else:
+                    st.info("Waiting for Prometheus CPU data")
+
+            with mc2:
+                if mem_data and mem_data.get("status") == "success":
+                    results = mem_data["data"]["result"]
+                    if results:
+                        mem_df = pd.DataFrame({
+                            r["metric"].get("pod", "unknown"): [float(r["value"][1]) / (1024**2)]
+                            for r in results
+                        })
+                        st.markdown("**Memory Usage (MB)**")
+                        st.bar_chart(mem_df.T, use_container_width=True)
+                    else:
+                        st.info("No memory data from Prometheus yet")
+                else:
+                    st.info("Waiting for Prometheus memory data")
+        except Exception as e:
+            st.warning(f"Could not load Prometheus metrics: {e}")
     else:
-        st.error(pods["err"])
-
-    # Running containers
-    st.subheader("🐳 Running Docker Containers")
-    out = docker("ps --format json")
-    if out["ok"] and out["out"]:
-        containers = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
-        if containers:
-            st.dataframe(
-                [{"Name": c.get("Names"), "Image": c.get("Image"), "Status": c.get("Status")} for c in containers],
-                use_container_width=True,
-            )
-    else:
-        st.info("No running containers")
+        st.info("Prometheus unreachable — start it with `kubectl apply -f k8s/prometheus/`")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 2 — DOCKER
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🐳 Docker":
-    st.title("🐳 Docker Manager")
+elif active_page == "🐳 Docker":
+    page_header("🐳", "Docker Manager", "Manage containers, images, volumes and networks")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Containers", "Images", "Volumes", "Actions"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📦 Containers", "🖼️ Images", "💾 Volumes", "⚡ Actions"])
 
-    # ── Containers tab
     with tab1:
-        st.subheader("All Containers")
         show_all = st.toggle("Show stopped containers", value=True)
         flag = "-a" if show_all else ""
-        out = docker(f"ps {flag} --format json")
+        with st.spinner("Loading containers..."):
+            out = docker(f"ps {flag} --format json")
         if out["ok"] and out["out"]:
             containers = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
-            df = [{"Name": c.get("Names"), "Image": c.get("Image"),
-                   "Status": c.get("Status"), "Ports": c.get("Ports", "")} for c in containers]
-            st.dataframe(df, use_container_width=True)
+            import pandas as pd
+            df = pd.DataFrame([{
+                "Name":    c.get("Names", ""),
+                "Image":   c.get("Image", ""),
+                "Status":  c.get("Status", ""),
+                "State":   c.get("State", ""),
+                "Ports":   c.get("Ports", ""),
+                "Created": c.get("CreatedAt", ""),
+            } for c in containers])
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
             st.divider()
-            st.subheader("Container Actions")
-            names = [c.get("Names") for c in containers]
-            selected = st.selectbox("Select container", names)
-            c1, c2, c3, c4 = st.columns(4)
-            if c1.button("▶ Start"):
-                r = docker(f"start {selected}")
-                show(r)
-            if c2.button("⏹ Stop"):
-                r = docker(f"stop {selected}")
-                show(r)
-            if c3.button("🔄 Restart"):
-                r = docker(f"restart {selected}")
-                show(r)
-            if c4.button("📋 Logs"):
-                r = docker(f"logs --tail 50 {selected}")
+            st.markdown("##### Container Actions")
+            names = [c.get("Names", "") for c in containers]
+            selected = st.selectbox("Select container", names, key="docker_sel")
+            ca1, ca2, ca3, ca4, ca5 = st.columns(5)
+            if ca1.button("▶ Start"):
+                show(docker(f"start {selected}"))
+            if ca2.button("⏹ Stop"):
+                show(docker(f"stop {selected}"))
+            if ca3.button("🔄 Restart"):
+                show(docker(f"restart {selected}"))
+            if ca4.button("📋 Logs"):
+                r = docker(f"logs --tail 100 {selected}")
                 st.code(r["out"] or r["err"], language="bash")
-
-            st.subheader("Container Stats")
-            if st.button("📊 Get Stats"):
-                r = docker(f"stats --no-stream --format json {selected}")
-                if r["ok"]:
-                    st.json(json.loads(r["out"]))
-
+            if ca5.button("🗑 Remove"):
+                show(docker(f"rm -f {selected}"))
         else:
-            st.info("No containers found")
+            st.info("No containers found — Docker may not be running")
 
-    # ── Images tab
     with tab2:
-        st.subheader("Local Images")
-        out = docker("images --format json")
+        with st.spinner("Loading images..."):
+            out = docker("images --format json")
         if out["ok"] and out["out"]:
             images = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
-            st.dataframe(
-                [{"Repository": i.get("Repository"), "Tag": i.get("Tag"), "Size": i.get("Size"), "ID": i.get("ID", "")[:12]} for i in images],
-                use_container_width=True,
-            )
+            import pandas as pd
+            df = pd.DataFrame([{
+                "Repository": i.get("Repository", ""),
+                "Tag":        i.get("Tag", ""),
+                "ID":         i.get("ID", "")[:12],
+                "Size":       i.get("Size", ""),
+                "Created":    i.get("CreatedSince", ""),
+            } for i in images])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No images found")
+
         st.divider()
-        st.subheader("Pull Image")
+        st.markdown("##### Pull Image")
         img_name = st.text_input("Image name (e.g. nginx:latest)")
         if st.button("⬇ Pull") and img_name:
             with st.spinner(f"Pulling {img_name}..."):
                 r = docker(f"pull {img_name}")
-            show(r)
+            show(r, f"Pulled {img_name} successfully")
 
-    # ── Volumes tab
     with tab3:
-        st.subheader("Volumes")
-        out = docker("volume ls --format json")
+        with st.spinner("Loading volumes..."):
+            out = docker("volume ls --format json")
         if out["ok"] and out["out"]:
             vols = [json.loads(l) for l in out["out"].splitlines() if l.strip()]
-            st.dataframe(
-                [{"Name": v.get("Name"), "Driver": v.get("Driver"), "Scope": v.get("Scope")} for v in vols],
-                use_container_width=True,
-            )
+            import pandas as pd
+            st.dataframe(pd.DataFrame([{
+                "Name":   v.get("Name", ""),
+                "Driver": v.get("Driver", ""),
+                "Scope":  v.get("Scope", ""),
+            } for v in vols]), use_container_width=True, hide_index=True)
+        else:
+            st.info("No volumes found")
 
-    # ── Actions tab
+        out_nets = docker("network ls --format json")
+        if out_nets["ok"] and out_nets["out"]:
+            st.markdown("##### Networks")
+            nets = [json.loads(l) for l in out_nets["out"].splitlines() if l.strip()]
+            import pandas as pd
+            st.dataframe(pd.DataFrame([{
+                "Name":   n.get("Name", ""),
+                "Driver": n.get("Driver", ""),
+                "Scope":  n.get("Scope", ""),
+            } for n in nets]), use_container_width=True, hide_index=True)
+
     with tab4:
-        st.subheader("Run New Container")
+        st.markdown("##### Run New Container")
         with st.form("run_container"):
             image  = st.text_input("Image", value="nginx:latest")
             name   = st.text_input("Container name (optional)")
@@ -285,1640 +654,1218 @@ elif page == "🐳 Docker":
                 if ports:  cmd += f" -p {ports}"
                 cmd += f" {image}"
                 r = docker(cmd)
-                show(r, f"Started: {r['out']}")
+                show(r, f"Container started: {r['out'][:20]}")
 
         st.divider()
-        st.subheader("System Prune")
-        st.warning("Removes stopped containers, unused images, and build cache.")
-        if st.button("🗑 Prune System"):
-            r = docker("system prune -f")
-            if r["ok"]:
-                st.code(r["out"])
-            else:
-                st.error(r["err"])
+        st.markdown("##### System Prune")
+        st.warning("Removes stopped containers, unused images, networks and build cache.")
+        if st.button("🗑 Prune System", type="secondary"):
+            with st.spinner("Pruning..."):
+                r = docker("system prune -f")
+            show(r, "System pruned successfully")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 3 — KUBERNETES
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "☸️ Kubernetes":
-    st.title("☸️ Kubernetes Manager")
-    st.caption("Namespace: **devops** | Cluster: **docker-desktop**")
+elif active_page == "☸️ Kubernetes":
+    page_header("☸️", "Kubernetes Manager", "Pods, deployments, services, events — docker-desktop cluster")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Pods", "Deployments", "Services & PVCs", "Events & Logs"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🟢 Pods", "📦 Deployments", "🌐 Services", "📋 Events", "📜 Logs"])
 
     with tab1:
-        st.subheader("Pods")
-        ns = st.text_input("Namespace", value="devops")
-        if st.button("🔄 Refresh Pods", key="refresh_pods"):
+        ns_input = st.text_input("Namespace", value="devops", key="k8s_ns")
+        if st.button("🔄 Refresh", key="k8s_refresh_pods"):
             st.cache_data.clear()
-        out = kube("get pods -o wide", ns=ns)
-        st.code(out["out"] or out["err"], language="bash")
+
+        @st.cache_data(ttl=30)
+        def get_pods_wide(ns):
+            r = kube("get pods -o wide --no-headers", ns=ns)
+            return r
+
+        r = get_pods_wide(ns_input)
+        if r["ok"] and r["out"]:
+            import pandas as pd
+            rows = []
+            for line in r["out"].splitlines():
+                parts = line.split()
+                if len(parts) >= 5:
+                    restarts = int(parts[3]) if parts[3].isdigit() else 0
+                    rows.append({
+                        "Name":     parts[0],
+                        "Ready":    parts[1],
+                        "Status":   parts[2],
+                        "Restarts": restarts,
+                        "Age":      parts[4] if len(parts) > 4 else "",
+                        "IP":       parts[5] if len(parts) > 5 else "",
+                        "Node":     parts[6] if len(parts) > 6 else "",
+                    })
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            high_restart = [r for r in rows if r["Restarts"] > 3]
+            if high_restart:
+                st.warning(f"⚠️ {len(high_restart)} pod(s) with high restart count: {', '.join(p['Name'] for p in high_restart)}")
+        else:
+            st.info("No pods found or cluster unreachable")
 
         st.divider()
-        st.subheader("Pod Actions")
-        pod_out = kube("get pods -o jsonpath='{.items[*].metadata.name}'", ns=ns)
-        pod_names = pod_out["out"].strip("'").split() if pod_out["ok"] else []
+        pod_out = kube(f"get pods -o jsonpath='{{.items[*].metadata.name}}'", ns=ns_input)
+        pod_names = pod_out["out"].strip("'").split() if pod_out["ok"] and pod_out["out"] else []
         if pod_names:
-            sel_pod = st.selectbox("Select pod", pod_names)
-            c1, c2 = st.columns(2)
-            if c1.button("🗑 Delete Pod (will restart)"):
-                r = kube(f"delete pod {sel_pod}", ns=ns)
-                show(r)
-            if c2.button("🔍 Describe Pod"):
-                r = kube(f"describe pod {sel_pod}", ns=ns)
+            sel_pod = st.selectbox("Select pod for actions", pod_names)
+            pk1, pk2, pk3 = st.columns(3)
+            if pk1.button("🔍 Describe"):
+                r = kube(f"describe pod {sel_pod}", ns=ns_input)
                 st.code(r["out"], language="bash")
+            if pk2.button("🗑 Delete Pod"):
+                show(kube(f"delete pod {sel_pod}", ns=ns_input))
+            if pk3.button("📋 Previous Logs"):
+                r = kube(f"logs {sel_pod} --previous --tail=50", ns=ns_input)
+                st.code(r["out"] or r["err"], language="bash")
 
     with tab2:
-        st.subheader("Deployments")
-        out = kube("get deployments", ns="devops")
-        st.code(out["out"] or out["err"], language="bash")
+        @st.cache_data(ttl=30)
+        def get_deployments():
+            r = kube("get deployments --no-headers", ns="devops")
+            return r
+
+        r = get_deployments()
+        if r["ok"] and r["out"]:
+            import pandas as pd
+            rows = []
+            for line in r["out"].splitlines():
+                parts = line.split()
+                if len(parts) >= 4:
+                    rows.append({
+                        "Name":     parts[0],
+                        "Ready":    parts[1],
+                        "Up-to-date": parts[2],
+                        "Available": parts[3],
+                        "Age":      parts[4] if len(parts) > 4 else "",
+                    })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No deployments in devops namespace")
 
         st.divider()
-        st.subheader("Scale Deployment")
+        st.markdown("##### Scale Deployment")
         dep_out = kube("get deployments -o jsonpath='{.items[*].metadata.name}'", ns="devops")
-        dep_names = dep_out["out"].strip("'").split() if dep_out["ok"] else []
+        dep_names = dep_out["out"].strip("'").split() if dep_out["ok"] and dep_out["out"] else []
         if dep_names:
             sel_dep = st.selectbox("Deployment", dep_names)
             replicas = st.slider("Replicas", min_value=0, max_value=5, value=1)
-            if st.button("⚖️ Scale"):
+            dk1, dk2 = st.columns(2)
+            if dk1.button("⚖️ Scale"):
                 r = kube(f"scale deployment {sel_dep} --replicas={replicas}", ns="devops")
-                show(r)
-
-            st.divider()
-            if st.button("🔄 Rollout Restart"):
+                show(r, f"Scaled {sel_dep} to {replicas} replicas")
+            if dk2.button("🔄 Rollout Restart"):
                 r = kube(f"rollout restart deployment/{sel_dep}", ns="devops")
-                show(r)
-
-            if st.button("📋 Rollout Status"):
-                r = kube(f"rollout status deployment/{sel_dep}", ns="devops")
-                st.code(r["out"] or r["err"], language="bash")
+                show(r, f"Rollout restart triggered for {sel_dep}")
 
     with tab3:
-        st.subheader("Services")
-        out = kube("get services", ns="devops")
-        st.code(out["out"] or out["err"], language="bash")
+        @st.cache_data(ttl=30)
+        def get_services():
+            r = kube("get svc --no-headers", ns="devops")
+            return r
 
-        st.subheader("PersistentVolumeClaims")
-        out = kube("get pvc", ns="devops")
-        st.code(out["out"] or out["err"], language="bash")
-
-    with tab4:
-        st.subheader("Recent Events")
-        out = kube("get events --sort-by=.lastTimestamp", ns="devops")
-        st.code(out["out"] or "No events", language="bash")
+        r = get_services()
+        if r["ok"] and r["out"]:
+            import pandas as pd
+            rows = []
+            for line in r["out"].splitlines():
+                parts = line.split()
+                if len(parts) >= 5:
+                    rows.append({
+                        "Name":       parts[0],
+                        "Type":       parts[1],
+                        "ClusterIP":  parts[2],
+                        "ExternalIP": parts[3],
+                        "Ports":      parts[4],
+                        "Age":        parts[5] if len(parts) > 5 else "",
+                    })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No services found")
 
         st.divider()
-        st.subheader("Pod Logs")
+        st.markdown("##### Persistent Volume Claims")
+        r_pvc = kube("get pvc --no-headers", ns="devops")
+        if r_pvc["ok"] and r_pvc["out"]:
+            import pandas as pd
+            rows_pvc = []
+            for line in r_pvc["out"].splitlines():
+                parts = line.split()
+                if len(parts) >= 5:
+                    rows_pvc.append({"Name": parts[0], "Status": parts[1], "Volume": parts[2], "Capacity": parts[3], "Access": parts[4]})
+            st.dataframe(pd.DataFrame(rows_pvc), use_container_width=True, hide_index=True)
+        else:
+            st.info("No PVCs found")
+
+    with tab4:
+        @st.cache_data(ttl=30)
+        def get_events():
+            r = kube("get events --sort-by=.lastTimestamp --no-headers", ns="devops")
+            return r
+
+        r = get_events()
+        if r["ok"] and r["out"]:
+            lines = r["out"].splitlines()[-30:]
+            import pandas as pd
+            rows = []
+            for line in lines:
+                parts = line.split(None, 5)
+                if len(parts) >= 5:
+                    rows.append({
+                        "Last Seen": parts[0],
+                        "Type":      parts[1],
+                        "Reason":    parts[2],
+                        "Object":    parts[3],
+                        "Message":   parts[4] if len(parts) > 4 else "",
+                    })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No events found")
+
+    with tab5:
         pod_out2 = kube("get pods -o jsonpath='{.items[*].metadata.name}'", ns="devops")
-        pod_names2 = pod_out2["out"].strip("'").split() if pod_out2["ok"] else []
+        pod_names2 = pod_out2["out"].strip("'").split() if pod_out2["ok"] and pod_out2["out"] else []
         if pod_names2:
-            sel_pod2 = st.selectbox("Pod", pod_names2, key="log_pod")
-            tail = st.slider("Tail lines", 10, 200, 50)
-            if st.button("📋 Fetch Logs"):
-                r = kube(f"logs {sel_pod2} --tail={tail}", ns="devops")
+            sel_pod_log = st.selectbox("Pod", pod_names2, key="log_pod")
+            tail_lines = st.slider("Lines", 50, 500, 100)
+            if st.button("📜 Fetch Logs"):
+                with st.spinner("Fetching logs..."):
+                    r = kube(f"logs {sel_pod_log} --tail={tail_lines}", ns="devops")
                 st.code(r["out"] or r["err"], language="bash")
+        else:
+            st.info("No pods found")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 4 — JENKINS
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "⚙️ Jenkins":
-    st.title("⚙️ Jenkins Manager")
-    st.caption(f"Connected to: **{JENKINS_URL}**")
+elif active_page == "⚙️ Jenkins":
+    page_header("⚙️", "Jenkins CI/CD", f"Pipeline automation · {JENKINS_URL}")
 
-    tab1, tab2, tab3 = st.tabs(["Jobs & Builds", "Create Job", "Nodes & Queue"])
+    if not port_up(30080):
+        st.info("Jenkins unreachable — check if the pod is running: `kubectl get pods -n devops`")
+        st.stop()
+
+    tab1, tab2, tab3 = st.tabs(["📋 Jobs", "🔨 Build History", "⚡ Trigger"])
 
     with tab1:
-        st.subheader("All Jobs")
-        if st.button("🔄 Refresh", key="j_refresh"):
-            st.cache_data.clear()
-
-        data = http_get(f"{JENKINS_URL}/api/json", JENKINS_AUTH,
-                        params={"tree": "jobs[name,color,buildable]"})
-
-        if data:
-            jobs = data.get("jobs", [])
-            color_map = {"blue": "🟢", "red": "🔴", "notbuilt": "⚪", "disabled": "⛔", "yellow": "🟡"}
-            if jobs:
-                st.dataframe(
-                    [{"Status": color_map.get(j.get("color",""), "❓"),
-                      "Name": j["name"], "Buildable": j.get("buildable")} for j in jobs],
-                    use_container_width=True,
-                )
-
-                st.divider()
-                st.subheader("Build Actions")
-                job_names = [j["name"] for j in jobs]
-                sel_job = st.selectbox("Select job", job_names)
-
-                c1, c2, c3 = st.columns(3)
-                if c1.button("🚀 Trigger Build"):
-                    crumb = jenkins_crumb()
-                    status, _ = http_post(f"{JENKINS_URL}/job/{sel_job}/build", JENKINS_AUTH, headers=crumb)
-                    if status in (200, 201):
-                        st.success(f"Build triggered for **{sel_job}**")
-                    else:
-                        st.error(f"Failed (HTTP {status})")
-
-                if c2.button("📊 Build Status"):
-                    d = http_get(f"{JENKINS_URL}/job/{sel_job}/lastBuild/api/json", JENKINS_AUTH)
-                    if d:
-                        result_icon = {"SUCCESS": "🟢", "FAILURE": "🔴", "UNSTABLE": "🟡"}.get(d.get("result"), "⚪")
-                        st.metric("Result", f"{result_icon} {d.get('result', 'RUNNING')}", delta=f"Build #{d.get('number')}")
-                        st.json({"number": d.get("number"), "result": d.get("result"),
-                                 "building": d.get("building"), "durationMs": d.get("duration")})
-
-                if c3.button("📋 Console Log"):
-                    import httpx as _httpx
-                    try:
-                        r = _httpx.get(f"{JENKINS_URL}/job/{sel_job}/lastBuild/consoleText",
-                                       auth=JENKINS_AUTH, timeout=10)
-                        lines = r.text.splitlines()
-                        st.code("\n".join(lines[-80:]), language="bash")
-                    except Exception as e:
-                        st.error(str(e))
-
-                st.subheader(f"Recent Builds — {sel_job}")
-                builds_data = http_get(f"{JENKINS_URL}/job/{sel_job}/api/json", JENKINS_AUTH,
-                                       params={"tree": "builds[number,result,duration,building]{0,10}"})
-                if builds_data:
-                    builds = builds_data.get("builds", [])
-                    if builds:
-                        st.dataframe(builds, use_container_width=True)
-            else:
-                st.info("No jobs found. Create one in the **Create Job** tab.")
-        else:
-            st.error(f"Cannot connect to Jenkins at {JENKINS_URL}")
-
-    with tab2:
-        st.subheader("Create Freestyle Job")
-        with st.form("create_job"):
-            job_name    = st.text_input("Job name", value="new-job")
-            description = st.text_input("Description", value="Created via MCP Streamlit")
-            shell_cmd   = st.text_area("Shell command", value='echo "Hello from Jenkins K8s!"\ndate\nhostname')
-            submitted = st.form_submit_button("✅ Create Job")
-
-        if submitted and job_name:
-            config_xml = f"""<?xml version="1.1" encoding="UTF-8"?>
-<project>
-  <description>{description}</description>
-  <keepDependencies>false</keepDependencies>
-  <properties/><scm class="hudson.scm.NullSCM"/>
-  <canRoam>true</canRoam><disabled>false</disabled>
-  <builders>
-    <hudson.tasks.Shell><command>{shell_cmd}</command></hudson.tasks.Shell>
-  </builders>
-  <publishers/><buildWrappers/>
-</project>""".encode("utf-8")
-            crumb = jenkins_crumb()
-            headers = {"Content-Type": "application/xml;charset=UTF-8", **crumb}
-            status, resp = http_post(f"{JENKINS_URL}/createItem?name={job_name}",
-                                     JENKINS_AUTH, content=config_xml, headers=headers)
-            if status in (200, 201):
-                st.success(f"✅ Job **{job_name}** created!")
-            else:
-                st.error(f"Failed HTTP {status}: {str(resp)[:200]}")
-
-    with tab3:
-        st.subheader("Build Nodes")
-        data = http_get(f"{JENKINS_URL}/computer/api/json", JENKINS_AUTH,
-                        params={"tree": "computer[displayName,offline,numExecutors,description]"})
-        if data:
-            nodes = data.get("computer", [])
-            st.dataframe(
-                [{"Node": n.get("displayName"), "Executors": n.get("numExecutors"),
-                  "Offline": n.get("offline")} for n in nodes],
-                use_container_width=True,
+        @st.cache_data(ttl=30)
+        def get_jenkins_jobs():
+            return http_json(
+                f"{JENKINS_URL}/api/json?tree=jobs[name,color,lastBuild[number,result,timestamp,duration,url]]",
+                auth=JENKINS_AUTH
             )
 
-        st.divider()
-        st.subheader("Build Queue")
-        q = http_get(f"{JENKINS_URL}/queue/api/json", JENKINS_AUTH)
-        if q:
-            items = q.get("items", [])
-            if items:
-                st.dataframe(
-                    [{"Job": i.get("task", {}).get("name"), "Why": i.get("why")} for i in items],
-                    use_container_width=True,
-                )
-            else:
-                st.success("Queue is empty")
+        data = get_jenkins_jobs()
+        if data and data.get("jobs"):
+            import pandas as pd
+            rows = []
+            for job in data["jobs"]:
+                lb = job.get("lastBuild") or {}
+                result = lb.get("result") or ("BUILDING" if lb else "—")
+                rows.append({
+                    "Job Name":   job.get("name", ""),
+                    "Status":     result,
+                    "Build #":    lb.get("number", ""),
+                    "Duration":   f"{int(lb.get('duration', 0)/1000)}s" if lb.get("duration") else "",
+                })
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            success = sum(1 for r in rows if r["Status"] == "SUCCESS")
+            failed  = sum(1 for r in rows if r["Status"] == "FAILURE")
+            jm1, jm2, jm3 = st.columns(3)
+            jm1.metric("Total Jobs", len(rows))
+            jm2.metric("SUCCESS", success)
+            jm3.metric("FAILURE", failed)
+        else:
+            st.info("No jobs found or Jenkins unreachable")
+
+    with tab2:
+        @st.cache_data(ttl=30)
+        def get_all_builds():
+            jobs_data = http_json(
+                f"{JENKINS_URL}/api/json?tree=jobs[name,builds[number,result,timestamp,duration]]",
+                auth=JENKINS_AUTH
+            )
+            builds = []
+            if jobs_data:
+                for job in (jobs_data.get("jobs") or []):
+                    for b in (job.get("builds") or [])[:5]:
+                        import datetime
+                        ts = b.get("timestamp", 0) / 1000
+                        builds.append({
+                            "Job":      job.get("name", ""),
+                            "Build #":  b.get("number", ""),
+                            "Result":   b.get("result") or "BUILDING",
+                            "Duration": f"{int(b.get('duration', 0)/1000)}s",
+                            "Started":  datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "",
+                        })
+            return sorted(builds, key=lambda x: x.get("Started", ""), reverse=True)[:30]
+
+        builds = get_all_builds()
+        if builds:
+            import pandas as pd
+            st.dataframe(pd.DataFrame(builds), use_container_width=True, hide_index=True)
+        else:
+            st.info("No build history found")
+
+    with tab3:
+        data2 = http_json(f"{JENKINS_URL}/api/json?tree=jobs[name]", auth=JENKINS_AUTH)
+        job_names = [j["name"] for j in (data2.get("jobs") or [])] if data2 else []
+        if job_names:
+            sel_job = st.selectbox("Select job to trigger", job_names)
+            params_input = st.text_area("Build parameters (KEY=VALUE per line, optional)")
+            if st.button("🚀 Trigger Build", type="primary"):
+                crumb = jenkins_crumb()
+                params = {}
+                if params_input.strip():
+                    for line in params_input.strip().splitlines():
+                        if "=" in line:
+                            k, v = line.split("=", 1)
+                            params[k.strip()] = v.strip()
+                if params:
+                    code, resp = http_post(
+                        f"{JENKINS_URL}/job/{sel_job}/buildWithParameters",
+                        auth=JENKINS_AUTH, data=params, headers=crumb
+                    )
+                else:
+                    code, resp = http_post(
+                        f"{JENKINS_URL}/job/{sel_job}/build",
+                        auth=JENKINS_AUTH, data={}, headers=crumb
+                    )
+                if code in (200, 201):
+                    st.success(f"Build triggered for {sel_job}")
+                else:
+                    st.error(f"Failed to trigger build (HTTP {code}): {resp}")
+        else:
+            st.info("No jobs available")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 5 — SONARQUBE
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🔍 SonarQube":
-    st.title("🔍 SonarQube Manager")
-    st.caption(f"Connected to: **{SONAR_URL}**")
+elif active_page == "🔍 SonarQube":
+    page_header("🔍", "SonarQube", f"Code quality & security analysis · {SONAR_URL}")
 
-    # Health check
-    health = http_get(f"{SONAR_URL}/api/system/health", SONAR_AUTH, timeout=5)
-    if health:
-        h = health.get("health", "UNKNOWN")
-        if h == "GREEN":
-            st.success(f"🟢 SonarQube Health: **{h}**")
-        else:
-            st.warning(f"⚠️ Health: {h}")
-    else:
-        st.error(f"🔴 SonarQube unreachable at {SONAR_URL}")
+    if not port_up(30900):
+        st.info("SonarQube unreachable — check if the pod is running: `kubectl get pods -n devops`")
         st.stop()
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Projects", "Quality Gates", "Issues", "Tokens"])
+    tab1, tab2, tab3 = st.tabs(["📊 Projects", "🐛 Issues", "⚙️ System"])
 
     with tab1:
-        st.subheader("Projects")
-        if st.button("🔄 Refresh Projects"):
-            st.cache_data.clear()
+        @st.cache_data(ttl=60)
+        def get_sonar_projects():
+            return http_json(f"{SONAR_URL}/api/projects/search", auth=SONAR_AUTH)
 
-        data = http_get(f"{SONAR_URL}/api/projects/search", SONAR_AUTH, params={"ps": 50})
-        components = data.get("components", []) if data else []
+        data = get_sonar_projects()
+        if data and data.get("components"):
+            import pandas as pd
+            projs = data["components"]
+            rows = []
+            for p in projs:
+                qg = http_json(f"{SONAR_URL}/api/qualitygates/project_status?projectKey={p['key']}", auth=SONAR_AUTH)
+                qg_status = (qg or {}).get("projectStatus", {}).get("status", "—")
+                rows.append({
+                    "Project":      p.get("name", ""),
+                    "Key":          p.get("key", ""),
+                    "Visibility":   p.get("visibility", ""),
+                    "Quality Gate": qg_status,
+                    "Last Analysis": p.get("lastAnalysisDate", "")[:10] if p.get("lastAnalysisDate") else "—",
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-        if components:
-            st.dataframe(
-                [{"Key": c["key"], "Name": c["name"],
-                  "Last Analysis": c.get("lastAnalysisDate", "never")} for c in components],
-                use_container_width=True,
-            )
+            total = data.get("paging", {}).get("total", len(projs))
+            st.metric("Total Projects", total)
 
             st.divider()
-            st.subheader("Project Metrics")
-            proj_keys = [c["key"] for c in components]
-            sel_proj = st.selectbox("Select project", proj_keys)
-            if st.button("📊 Get Metrics"):
-                metrics = "bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc"
-                m_data = http_get(
-                    f"{SONAR_URL}/api/measures/component", SONAR_AUTH,
-                    params={"component": sel_proj, "metricKeys": metrics},
+            st.markdown("##### Project Metrics")
+            project_keys = [p["key"] for p in projs]
+            sel_proj = st.selectbox("Select project", project_keys)
+            if sel_proj:
+                metrics_data = http_json(
+                    f"{SONAR_URL}/api/measures/component?component={sel_proj}"
+                    f"&metricKeys=bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc",
+                    auth=SONAR_AUTH
                 )
-                if m_data:
-                    measures = {m["metric"]: m.get("value", "N/A")
-                                for m in m_data.get("component", {}).get("measures", [])}
-                    cols = st.columns(len(measures))
-                    for i, (k, v) in enumerate(measures.items()):
-                        cols[i].metric(k.replace("_", " ").title(), v)
-
-            if st.button("🔒 Quality Gate Status"):
-                qg = http_get(f"{SONAR_URL}/api/qualitygates/project_status", SONAR_AUTH,
-                              params={"projectKey": sel_proj})
-                if qg:
-                    status = qg.get("projectStatus", {}).get("status", "NONE")
-                    icon = "🟢" if status == "OK" else "🔴" if status == "ERROR" else "⚪"
-                    st.metric("Quality Gate", f"{icon} {status}")
+                if metrics_data:
+                    measures = {m["metric"]: m.get("value", "—")
+                                for m in metrics_data.get("component", {}).get("measures", [])}
+                    m1, m2, m3, m4, m5, m6 = st.columns(6)
+                    m1.metric("Bugs",         measures.get("bugs", "—"))
+                    m2.metric("Vulnerabilities", measures.get("vulnerabilities", "—"))
+                    m3.metric("Code Smells",  measures.get("code_smells", "—"))
+                    m4.metric("Coverage",     measures.get("coverage", "—") + "%" if measures.get("coverage") else "—")
+                    m5.metric("Duplication",  measures.get("duplicated_lines_density", "—") + "%" if measures.get("duplicated_lines_density") else "—")
+                    m6.metric("Lines",        measures.get("ncloc", "—"))
         else:
-            st.info("No projects found.")
-
-        st.divider()
-        st.subheader("Create Project")
-        with st.form("create_project"):
-            pkey  = st.text_input("Project Key", value="my-app")
-            pname = st.text_input("Project Name", value="My Application")
-            submitted = st.form_submit_button("➕ Create Project")
-        if submitted and pkey:
-            status, resp = http_post(f"{SONAR_URL}/api/projects/create", SONAR_AUTH,
-                                     data={"project": pkey, "name": pname, "visibility": "public"})
-            if status == 200:
-                st.success(f"✅ Project **{pkey}** created!")
-            else:
-                st.error(f"Failed: {str(resp)[:200]}")
+            st.info("No projects found — run a scan first")
 
     with tab2:
-        st.subheader("Quality Gates")
-        data = http_get(f"{SONAR_URL}/api/qualitygates/list", SONAR_AUTH)
-        if data:
-            gates = data.get("qualitygates", [])
-            st.dataframe(
-                [{"Name": g["name"], "Default": g.get("isDefault", False)} for g in gates],
-                use_container_width=True,
-            )
+        @st.cache_data(ttl=60)
+        def get_sonar_issues():
+            return http_json(f"{SONAR_URL}/api/issues/search?ps=50", auth=SONAR_AUTH)
+
+        data = get_sonar_issues()
+        if data and data.get("issues"):
+            import pandas as pd
+            rows = []
+            for issue in data["issues"][:50]:
+                rows.append({
+                    "Project":   issue.get("project", ""),
+                    "Type":      issue.get("type", ""),
+                    "Severity":  issue.get("severity", ""),
+                    "Message":   issue.get("message", "")[:80],
+                    "Status":    issue.get("status", ""),
+                    "Component": issue.get("component", "").split(":")[-1],
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.caption(f"Showing {len(rows)} of {data.get('paging', {}).get('total', '?')} total issues")
+        else:
+            st.info("No issues found")
 
     with tab3:
-        st.subheader("Open Issues")
-        data = http_get(f"{SONAR_URL}/api/projects/search", SONAR_AUTH, params={"ps": 50})
-        components = data.get("components", []) if data else []
-        if components:
-            sel_proj2 = st.selectbox("Project", [c["key"] for c in components], key="issue_proj")
-            severity  = st.selectbox("Severity", ["", "BLOCKER", "CRITICAL", "MAJOR", "MINOR", "INFO"])
-            itype     = st.selectbox("Type", ["", "BUG", "VULNERABILITY", "CODE_SMELL"])
-            if st.button("🔍 Search Issues"):
-                params = {"componentKeys": sel_proj2, "ps": 20, "resolved": "false"}
-                if severity: params["severities"] = severity
-                if itype:    params["types"] = itype
-                idata = http_get(f"{SONAR_URL}/api/issues/search", SONAR_AUTH, params=params)
-                if idata:
-                    issues = idata.get("issues", [])
-                    if issues:
-                        st.dataframe(
-                            [{"Type": i["type"], "Severity": i["severity"],
-                              "Message": i["message"][:80], "Line": i.get("line")} for i in issues],
-                            use_container_width=True,
-                        )
-                        st.caption(f"Total: {idata.get('total', 0)} issues")
-                    else:
-                        st.success("No open issues found!")
+        health_data = http_json(f"{SONAR_URL}/api/system/health", auth=SONAR_AUTH)
+        info_data   = http_json(f"{SONAR_URL}/api/system/info", auth=SONAR_AUTH)
 
-    with tab4:
-        st.subheader("Generate User Token")
-        with st.form("gen_token"):
-            tname = st.text_input("Token name", value="my-scanner-token")
-            submitted = st.form_submit_button("🔑 Generate Token")
-        if submitted and tname:
-            status, resp = http_post(f"{SONAR_URL}/api/user_tokens/generate", SONAR_AUTH,
-                                     data={"name": tname, "login": "admin"})
-            if status == 200 and isinstance(resp, dict):
-                token_val = resp.get("token", "")
-                st.success("Token generated!")
-                st.code(token_val, language="text")
-                st.caption("⚠️ Copy this token now — it won't be shown again.")
-            else:
-                st.error(f"Failed: {str(resp)[:200]}")
+        if health_data:
+            st.markdown(f"**System Health:** {status_badge(health_data.get('health') == 'GREEN', 'HEALTHY', 'DEGRADED')}", unsafe_allow_html=True)
+        if info_data:
+            st.markdown(f"**Version:** `{info_data.get('System', {}).get('Version', '?')}`")
+            st.markdown(f"**Edition:** `{info_data.get('System', {}).get('Edition', '?')}`")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 6 — TERRAFORM
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🌍 Terraform":
-    st.title("🌍 Terraform Manager")
-    st.caption(f"Workdir: `{TF_WORKDIR}`")
+elif active_page == "🌍 Terraform":
+    page_header("🌍", "Terraform Manager", f"Infrastructure as Code · {TF_WORKDIR}")
 
-    tab1, tab2, tab3 = st.tabs(["Plan & Apply", "State", "Workspaces"])
+    if not shutil.which("terraform"):
+        st.warning("Terraform not installed — run `brew install terraform`")
+        st.stop()
+
+    tab1, tab2, tab3 = st.tabs(["📋 State", "🔨 Operations", "📤 Outputs"])
 
     with tab1:
-        st.subheader("Variables")
-        col1, col2, col3, col4 = st.columns(4)
-        app_name    = col1.text_input("App Name",    value="my-devops-app")
-        environment = col2.selectbox("Environment",  ["dev", "staging", "prod"])
-        app_port    = col3.number_input("Port",       value=3000, min_value=1000, max_value=65535)
-        log_level   = col4.selectbox("Log Level",    ["debug", "info", "warn", "error"])
+        @st.cache_data(ttl=60)
+        def tf_state():
+            return tf("terraform state list")
 
-        var_flags = (f'-var "app_name={app_name}" -var "environment={environment}" '
-                     f'-var "app_port={app_port}" -var "log_level={log_level}"')
+        r = tf_state()
+        if r["ok"] and r["out"]:
+            lines = r["out"].splitlines()
+            st.metric("Resources in state", len(lines))
+            import pandas as pd
+            st.dataframe(pd.DataFrame({"Resource": lines}), use_container_width=True, hide_index=True)
+        else:
+            st.info("No state found — run `terraform init` first")
 
-        c1, c2, c3, c4 = st.columns(4)
-        if c1.button("🔧 Init"):
-            with st.spinner("Running terraform init..."):
-                r = tf("terraform init -no-color")
-            st.code(f"{r['out']}\n{r['err']}", language="bash")
+        @st.cache_data(ttl=60)
+        def tf_ver():
+            return tf("terraform version -json")
 
-        if c2.button("📋 Validate"):
-            r = tf("terraform validate -json")
+        ver_r = tf_ver()
+        if ver_r["ok"]:
             try:
-                d = json.loads(r["out"])
-                if d.get("valid"):
-                    st.success("✅ Configuration is valid!")
-                else:
-                    st.error(f"Invalid: {d.get('diagnostics')}")
+                ver_data = json.loads(ver_r["out"])
+                st.markdown(f"**Terraform Version:** `{ver_data.get('terraform_version', '?')}`")
             except Exception:
-                st.code(r["out"] or r["err"])
-
-        if c3.button("🔍 Plan"):
-            with st.spinner("Running terraform plan..."):
-                r = tf(f"terraform plan -no-color {var_flags}")
-            st.code(f"{r['out']}\n{r['err']}", language="bash")
-
-        if c4.button("🚀 Apply", type="primary"):
-            with st.spinner("Running terraform apply..."):
-                r = tf(f"terraform apply -no-color -auto-approve {var_flags}")
-            combined = f"{r['out']}\n{r['err']}"
-            if "Apply complete!" in combined:
-                st.success("✅ Apply complete!")
-            else:
-                st.error("Apply may have failed")
-            st.code(combined, language="bash")
-
-        st.divider()
-        if st.button("💥 Destroy", type="secondary"):
-            with st.spinner("Running terraform destroy..."):
-                r = tf(f"terraform destroy -no-color -auto-approve {var_flags}")
-            st.code(f"{r['out']}\n{r['err']}", language="bash")
+                pass
 
     with tab2:
-        st.subheader("State Resources")
-        if st.button("🔄 Refresh State"):
-            r = tf("terraform state list")
-            if r["ok"] and r["out"]:
-                resources = r["out"].splitlines()
-                st.write(f"**{len(resources)} resources tracked**")
-                for res in resources:
-                    st.code(res)
-            else:
-                st.info("State is empty — run Apply first.")
+        c1, c2, c3, c4 = st.columns(4)
+        if c1.button("⚙️ Init"):
+            with st.spinner("Running terraform init..."):
+                r = tf("terraform init")
+            show(r, "Initialized successfully")
+        if c2.button("✅ Validate"):
+            with st.spinner("Validating..."):
+                r = tf("terraform validate")
+            show(r, "Configuration is valid")
+        if c3.button("📋 Plan"):
+            with st.spinner("Planning..."):
+                r = tf("terraform plan")
+            st.code(r["out"] or r["err"], language="bash")
+        if c4.button("🚀 Apply"):
+            with st.spinner("Applying (auto-approve)..."):
+                r = tf("terraform apply -auto-approve")
+            show(r)
 
         st.divider()
-        st.subheader("Outputs")
-        if st.button("📤 Show Outputs"):
-            r = tf("terraform output -json")
+        st.markdown("##### Destroy")
+        st.warning("This will destroy all managed resources.")
+        if st.button("💥 Destroy (auto-approve)", type="secondary"):
+            with st.spinner("Destroying..."):
+                r = tf("terraform destroy -auto-approve")
+            show(r)
+
+    with tab3:
+        if st.button("📤 Fetch Outputs"):
+            with st.spinner("Fetching outputs..."):
+                r = tf("terraform output -json")
             if r["ok"] and r["out"]:
                 try:
-                    data = json.loads(r["out"])
-                    for k, v in data.items():
-                        st.metric(k.replace("_", " ").title(), str(v.get("value"))[:60])
+                    st.json(json.loads(r["out"]))
                 except Exception:
                     st.code(r["out"])
             else:
-                st.info("No outputs — run Apply first.")
-
-    with tab3:
-        st.subheader("Workspaces")
-        r = tf("terraform workspace list")
-        if r["ok"]:
-            lines = r["out"].splitlines()
-            current = next((l.replace("*", "").strip() for l in lines if "*" in l), "default")
-            st.info(f"Active workspace: **{current}**")
-            for line in lines:
-                icon = "✅" if "*" in line else "  "
-                st.markdown(f"{icon} `{line.replace('*','').strip()}`")
-
-        st.divider()
-        with st.form("new_workspace"):
-            ws_name = st.text_input("New workspace name")
-            submitted = st.form_submit_button("➕ Create Workspace")
-        if submitted and ws_name:
-            r = tf(f"terraform workspace new {ws_name}")
-            show(r, f"Workspace **{ws_name}** created!")
-
-        with st.form("select_workspace"):
-            sel_ws = st.text_input("Switch to workspace")
-            submitted2 = st.form_submit_button("🔀 Select Workspace")
-        if submitted2 and sel_ws:
-            r = tf(f"terraform workspace select {sel_ws}")
-            show(r, f"Switched to **{sel_ws}**")
+                st.info("No outputs defined or state is empty")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 7 — PROMETHEUS & GRAFANA
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "📊 Prometheus & Grafana":
-    st.title("📊 Prometheus & Grafana")
+elif active_page == "📊 Prometheus & Grafana":
+    page_header("📊", "Prometheus & Grafana", f"Metrics, alerting and dashboards · Prom:{PROM_URL}  Grafana:{GRAFANA_URL}")
 
-    # Health row
-    col1, col2 = st.columns(2)
-    with col1:
-        try:
-            import httpx as _hx
-            r = _hx.get(f"{PROM_URL}/-/ready", timeout=4)
-            if r.status_code == 200:
-                st.success(f"🟢 Prometheus ready — {PROM_URL}")
-            else:
-                st.error(f"🔴 Prometheus not ready ({r.status_code})")
-        except Exception as e:
-            st.error(f"🔴 Prometheus unreachable: {e}")
+    prom_alive  = port_up(30090)
+    graf_alive  = port_up(30030)
+    pm1, pm2 = st.columns(2)
+    pm1.markdown(f"**Prometheus:** {status_badge(prom_alive)}", unsafe_allow_html=True)
+    pm2.markdown(f"**Grafana:** {status_badge(graf_alive)}", unsafe_allow_html=True)
 
-    with col2:
-        g = http_get(f"{GRAFANA_URL}/api/health", GRAFANA_AUTH, timeout=4)
-        if g and "error" not in g:
-            st.success(f"🟢 Grafana {g.get('version', '')} — {GRAFANA_URL}")
-        else:
-            st.error(f"🔴 Grafana unreachable")
-
-    st.divider()
-
-    tab1, tab2, tab3, tab4 = st.tabs(["Query Metrics", "Alerts & Targets", "Dashboards", "Datasources"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🎯 Targets", "🚨 Alerts", "🔍 Query", "📊 Grafana"])
 
     with tab1:
-        st.subheader("PromQL Query")
-        promql = st.text_input("PromQL expression", value="up")
-        if st.button("▶ Run Query"):
-            data = http_get(f"{PROM_URL}/api/v1/query", params={"query": promql}, timeout=10)
+        if prom_alive:
+            @st.cache_data(ttl=30)
+            def get_prom_targets():
+                return http_json(f"{PROM_URL}/api/v1/targets")
+
+            data = get_prom_targets()
             if data and data.get("status") == "success":
-                results = data.get("data", {}).get("result", [])
-                if results:
-                    st.dataframe(
-                        [{"metric": str(r.get("metric")), "value": r.get("value", [None, None])[1]}
-                         for r in results],
-                        use_container_width=True,
-                    )
+                active = data["data"].get("activeTargets", [])
+                import pandas as pd
+                rows = []
+                for t in active:
+                    rows.append({
+                        "Job":      t.get("labels", {}).get("job", ""),
+                        "Instance": t.get("labels", {}).get("instance", ""),
+                        "State":    t.get("health", ""),
+                        "Last Scrape": t.get("lastScrape", "")[:19],
+                        "Endpoint": t.get("scrapeUrl", ""),
+                    })
+                if rows:
+                    df = pd.DataFrame(rows)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+                    up_count = sum(1 for r in rows if r["State"] == "up")
+                    st.metric(f"Targets UP / Total", f"{up_count} / {len(rows)}")
                 else:
-                    st.info("No data returned.")
+                    st.info("No active targets")
             else:
-                st.error(f"Query failed: {data}")
-
-        st.divider()
-        st.subheader("Quick Metrics")
-        col1, col2 = st.columns(2)
-        ns_q = col1.text_input("Namespace", value="devops", key="prom_ns")
-        if col2.button("📈 CPU Usage"):
-            q = f"sum(rate(container_cpu_usage_seconds_total{{namespace='{ns_q}',container!=''}}[5m])) by (pod)"
-            data = http_get(f"{PROM_URL}/api/v1/query", params={"query": q}, timeout=10)
-            if data and data.get("status") == "success":
-                results = data.get("data", {}).get("result", [])
-                if results:
-                    cpu_data = {r["metric"].get("pod", "?"): float(r["value"][1]) for r in results}
-                    st.bar_chart(cpu_data)
-                else:
-                    st.info("No CPU data.")
-
-        if st.button("💾 Memory Usage"):
-            q = f"sum(container_memory_usage_bytes{{namespace='{ns_q}',container!=''}}) by (pod)"
-            data = http_get(f"{PROM_URL}/api/v1/query", params={"query": q}, timeout=10)
-            if data and data.get("status") == "success":
-                results = data.get("data", {}).get("result", [])
-                if results:
-                    mem_data = {r["metric"].get("pod", "?"): int(r["value"][1]) // (1024*1024) for r in results}
-                    st.bar_chart(mem_data)
-                    st.caption("Memory in MiB")
-                else:
-                    st.info("No memory data.")
+                st.warning("Could not fetch targets from Prometheus")
+        else:
+            st.info("Prometheus unreachable on port 30090")
 
     with tab2:
-        st.subheader("Active Alerts")
-        if st.button("🔄 Refresh Alerts"):
-            data = http_get(f"{PROM_URL}/api/v1/alerts", timeout=8)
-            if data:
-                alerts = data.get("data", {}).get("alerts", [])
-                if alerts:
-                    st.dataframe(
-                        [{"name": a.get("labels", {}).get("alertname"),
-                          "state": a.get("state"),
-                          "severity": a.get("labels", {}).get("severity"),
-                          "summary": a.get("annotations", {}).get("summary", "")} for a in alerts],
-                        use_container_width=True,
-                    )
-                else:
-                    st.success("No active alerts.")
+        if prom_alive:
+            @st.cache_data(ttl=30)
+            def get_prom_alerts():
+                return http_json(f"{PROM_URL}/api/v1/alerts")
 
-        st.divider()
-        st.subheader("Scrape Targets")
-        if st.button("🔄 Refresh Targets"):
-            data = http_get(f"{PROM_URL}/api/v1/targets", timeout=8)
-            if data:
-                active = data.get("data", {}).get("activeTargets", [])
-                st.dataframe(
-                    [{"job": t.get("labels", {}).get("job"),
-                      "instance": t.get("labels", {}).get("instance"),
-                      "health": t.get("health"),
-                      "lastError": t.get("lastError", "")} for t in active],
-                    use_container_width=True,
-                )
+            data = get_prom_alerts()
+            if data and data.get("status") == "success":
+                alerts = data["data"].get("alerts", [])
+                if alerts:
+                    import pandas as pd
+                    rows = []
+                    for a in alerts:
+                        rows.append({
+                            "Name":    a.get("labels", {}).get("alertname", ""),
+                            "State":   a.get("state", ""),
+                            "Severity": a.get("labels", {}).get("severity", ""),
+                            "Summary": a.get("annotations", {}).get("summary", ""),
+                        })
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                else:
+                    st.success("No active alerts — all systems nominal")
+            else:
+                st.info("No alert data")
+        else:
+            st.info("Prometheus unreachable")
 
     with tab3:
-        st.subheader("Grafana Dashboards")
-        if st.button("🔄 Refresh Dashboards"):
-            st.cache_data.clear()
-
-        @st.cache_data(ttl=30)
-        def get_dashboards():
-            return http_get(f"{GRAFANA_URL}/api/search?type=dash-db", GRAFANA_AUTH)
-
-        dashboards = get_dashboards()
-        if dashboards and not isinstance(dashboards, dict):
-            st.dataframe(
-                [{"Title": d.get("title"), "UID": d.get("uid"), "URL": d.get("url", "")} for d in dashboards],
-                use_container_width=True,
-            )
-        else:
-            st.info("No dashboards found.")
-
-        st.divider()
-        st.subheader("Create Dashboard")
-        with st.form("create_dashboard"):
-            dash_title  = st.text_input("Dashboard title", value="K8s Pod CPU")
-            prom_query  = st.text_input("PromQL", value="rate(container_cpu_usage_seconds_total[5m])")
-            panel_title = st.text_input("Panel title", value="CPU Usage")
-            submitted   = st.form_submit_button("➕ Create")
-        if submitted and dash_title:
-            dashboard = {
-                "dashboard": {
-                    "title": dash_title,
-                    "panels": [{
-                        "id": 1, "title": panel_title, "type": "timeseries",
-                        "gridPos": {"x": 0, "y": 0, "w": 24, "h": 8},
-                        "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"},
-                                     "expr": prom_query, "legendFormat": "{{pod}}"}],
-                    }],
-                    "time": {"from": "now-1h", "to": "now"}, "refresh": "30s",
-                },
-                "overwrite": True, "folderId": 0,
-            }
-            status, resp = http_post(f"{GRAFANA_URL}/api/dashboards/db", GRAFANA_AUTH, json_data=dashboard)
-            if status == 200:
-                st.success(f"Dashboard **{dash_title}** created!")
+        query = st.text_input("PromQL Query", value="up", placeholder="e.g. rate(http_requests_total[5m])")
+        if st.button("▶ Execute Query") and prom_alive:
+            with st.spinner("Querying Prometheus..."):
+                data = http_json(f"{PROM_URL}/api/v1/query", params={"query": query})
+            if data and data.get("status") == "success":
+                results = data["data"].get("result", [])
+                if results:
+                    import pandas as pd
+                    rows = []
+                    for r in results:
+                        row = {k: v for k, v in r.get("metric", {}).items()}
+                        row["value"] = r.get("value", [None, None])[1]
+                        rows.append(row)
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Query returned no results")
             else:
-                st.error(f"Failed: {str(resp)[:200]}")
+                st.error("Query failed or Prometheus unreachable")
 
     with tab4:
-        st.subheader("Grafana Datasources")
-        data = http_get(f"{GRAFANA_URL}/api/datasources", GRAFANA_AUTH)
-        if data and isinstance(data, list):
-            st.dataframe(
-                [{"Name": d.get("name"), "Type": d.get("type"), "URL": d.get("url"),
-                  "Default": d.get("isDefault")} for d in data],
-                use_container_width=True,
-            )
+        if graf_alive:
+            @st.cache_data(ttl=60)
+            def get_grafana_dashboards():
+                return http_json(f"{GRAFANA_URL}/api/search?type=dash-db", auth=GRAFANA_AUTH)
+
+            @st.cache_data(ttl=60)
+            def get_grafana_datasources():
+                return http_json(f"{GRAFANA_URL}/api/datasources", auth=GRAFANA_AUTH)
+
+            gds = get_grafana_datasources()
+            gdbs = get_grafana_dashboards()
+
+            gm1, gm2 = st.columns(2)
+            gm1.metric("Datasources", len(gds) if gds else 0)
+            gm2.metric("Dashboards", len(gdbs) if gdbs else 0)
+
+            if gds:
+                st.markdown("##### Datasources")
+                import pandas as pd
+                st.dataframe(pd.DataFrame([{
+                    "Name":     d.get("name", ""),
+                    "Type":     d.get("type", ""),
+                    "URL":      d.get("url", ""),
+                    "Default":  d.get("isDefault", False),
+                } for d in gds]), use_container_width=True, hide_index=True)
+
+            if gdbs:
+                st.markdown("##### Dashboards")
+                st.dataframe(pd.DataFrame([{
+                    "Title":   d.get("title", ""),
+                    "Folder":  d.get("folderTitle", "General"),
+                    "UID":     d.get("uid", ""),
+                    "URL":     GRAFANA_URL + d.get("url", ""),
+                } for d in gdbs]), use_container_width=True, hide_index=True)
+
+            st.link_button("🌐 Open Grafana", GRAFANA_URL, use_container_width=True)
         else:
-            st.info("No datasources configured.")
+            st.info("Grafana unreachable on port 30030")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 8 — ARGOCD
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🔀 ArgoCD":
-    st.title("🔀 ArgoCD GitOps Manager")
-    st.caption(f"Connected to: **{ARGOCD_URL}**")
+elif active_page == "🔀 ArgoCD":
+    page_header("🔀", "ArgoCD", f"GitOps continuous delivery · {ARGOCD_URL}")
 
-    # Health
-    try:
-        import httpx as _hx
-        r = _hx.get(f"{ARGOCD_URL}/api/version", verify=False, timeout=5)
-        v = r.json()
-        st.success(f"🟢 ArgoCD {v.get('Version', '')} ready")
-    except Exception as e:
-        st.error(f"🔴 ArgoCD unreachable: {e}")
+    @st.cache_data(ttl=60)
+    def argocd_token():
+        import httpx
+        try:
+            r = httpx.post(f"{ARGOCD_URL}/api/v1/session",
+                           json={"username": "admin", "password": "Admin@123456789@"},
+                           timeout=6, verify=False)
+            if r.status_code == 200:
+                return r.json().get("token", "")
+        except Exception:
+            pass
+        return None
+
+    token = argocd_token()
+    if not token:
+        st.info("ArgoCD unreachable — check if the pod is running in argocd namespace")
+        st.link_button("🌐 Open ArgoCD UI", ARGOCD_URL)
         st.stop()
 
-    def _argocd_token() -> str:
+    def argo_get(path):
+        import httpx
         try:
-            pw_proc = subprocess.run(
-                "kubectl get secret argocd-initial-admin-secret -n argocd "
-                "-o jsonpath='{.data.password}' | base64 --decode",
-                shell=True, capture_output=True, text=True,
-            )
-            password = pw_proc.stdout.strip().strip("'")
-            import httpx as _hx
-            resp = _hx.post(
-                f"{ARGOCD_URL}/api/v1/session",
-                json={"username": "admin", "password": password},
-                verify=False, timeout=10,
-            )
-            return resp.json().get("token", "")
+            r = httpx.get(f"{ARGOCD_URL}{path}",
+                          headers={"Authorization": f"Bearer {token}"},
+                          timeout=10, verify=False)
+            if r.status_code == 200:
+                return r.json()
         except Exception:
-            return ""
+            pass
+        return None
 
-    def argocd_api(method: str, path: str, data: dict = None) -> dict:
-        token = _argocd_token()
-        headers = {"Authorization": f"Bearer {token}"} if token else {}
+    def argo_post(path, payload=None):
+        import httpx
         try:
-            import httpx as _hx
-            r = getattr(_hx, method)(
-                f"{ARGOCD_URL}/api/v1/{path}",
-                json=data, headers=headers, verify=False, timeout=15,
-            )
-            return r.json() if r.text else {"status": "ok"}
+            r = httpx.post(f"{ARGOCD_URL}{path}",
+                           json=payload or {},
+                           headers={"Authorization": f"Bearer {token}"},
+                           timeout=15, verify=False)
+            return r.status_code, r.json() if r.text else {}
         except Exception as e:
-            return {"error": str(e)}
+            return 0, str(e)
 
-    tab1, tab2, tab3 = st.tabs(["Applications", "Create App", "Repositories"])
+    tab1, tab2, tab3 = st.tabs(["📱 Applications", "📁 Repositories", "🔄 Sync"])
 
     with tab1:
-        if st.button("🔄 Refresh Apps"):
-            st.cache_data.clear()
-
-        data = argocd_api("get", "applications")
-        apps = data.get("items", []) if "error" not in data else []
-
-        if apps:
-            app_rows = []
-            for a in apps:
-                sync   = a["status"].get("sync", {}).get("status", "Unknown")
-                health = a["status"].get("health", {}).get("status", "Unknown")
-                app_rows.append({
-                    "Name":      a["metadata"]["name"],
-                    "Project":   a["spec"].get("project", "default"),
-                    "Repo":      a["spec"]["source"].get("repoURL", "")[-40:],
-                    "Namespace": a["spec"]["destination"].get("namespace"),
-                    "Sync":      sync,
-                    "Health":    health,
+        apps_data = argo_get("/api/v1/applications")
+        if apps_data and apps_data.get("items"):
+            apps = apps_data["items"]
+            import pandas as pd
+            rows = []
+            for app in apps:
+                status = app.get("status", {})
+                rows.append({
+                    "Name":        app.get("metadata", {}).get("name", ""),
+                    "Project":     app.get("spec", {}).get("project", ""),
+                    "Sync Status": status.get("sync", {}).get("status", ""),
+                    "Health":      status.get("health", {}).get("status", ""),
+                    "Repo":        app.get("spec", {}).get("source", {}).get("repoURL", ""),
+                    "Namespace":   app.get("spec", {}).get("destination", {}).get("namespace", ""),
                 })
-            st.dataframe(app_rows, use_container_width=True)
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
 
-            st.divider()
-            app_names = [a["metadata"]["name"] for a in apps]
-            sel_app = st.selectbox("Select application", app_names)
-
-            c1, c2, c3 = st.columns(3)
-            if c1.button("🔄 Sync App"):
-                result = argocd_api("post", f"applications/{sel_app}/sync",
-                                    {"prune": False, "dryRun": False, "force": False})
-                if "error" not in result:
-                    st.success(f"Sync triggered for **{sel_app}**")
-                else:
-                    st.error(f"Error: {result['error']}")
-
-            if c2.button("🔍 App Details"):
-                result = argocd_api("get", f"applications/{sel_app}")
-                if "error" not in result:
-                    status = result.get("status", {})
-                    st.json({
-                        "syncStatus":   status.get("sync", {}).get("status"),
-                        "healthStatus": status.get("health", {}).get("status"),
-                        "revision":     status.get("sync", {}).get("revision", "")[:8],
-                        "resources":    len(status.get("resources", [])),
-                    })
-
-            if c3.button("🗑 Delete App"):
-                import httpx as _hx
-                token = _argocd_token()
-                headers = {"Authorization": f"Bearer {token}"} if token else {}
-                r = _hx.delete(
-                    f"{ARGOCD_URL}/api/v1/applications/{sel_app}",
-                    headers=headers, params={"cascade": "true"}, verify=False, timeout=15,
-                )
-                if r.status_code in (200, 204):
-                    st.success(f"Deleted **{sel_app}**")
-                else:
-                    st.error(f"Error: {r.text[:200]}")
+            synced = sum(1 for r in rows if r["Sync Status"] == "Synced")
+            healthy = sum(1 for r in rows if r["Health"] == "Healthy")
+            am1, am2, am3 = st.columns(3)
+            am1.metric("Total Apps", len(rows))
+            am2.metric("Synced", synced)
+            am3.metric("Healthy", healthy)
         else:
-            if "error" in data:
-                st.error(f"API error: {data['error']}")
-            else:
-                st.info("No applications found. Create one in **Create App** tab.")
+            st.info("No ArgoCD applications found")
 
     with tab2:
-        st.subheader("Create ArgoCD Application")
-        with st.form("create_argo_app"):
-            app_name    = st.text_input("App name", value="my-app")
-            repo_url    = st.text_input("Git repo URL", value="https://github.com/argoproj/argocd-example-apps")
-            app_path    = st.text_input("Path in repo", value="guestbook")
-            dest_ns     = st.text_input("Destination namespace", value="default")
-            target_rev  = st.text_input("Target revision", value="HEAD")
-            auto_sync   = st.checkbox("Enable auto-sync", value=True)
-            submitted   = st.form_submit_button("🚀 Create Application")
-
-        if submitted and app_name and repo_url:
-            sync_policy = {"automated": {"prune": True, "selfHeal": True}} if auto_sync else {}
-            payload = {
-                "metadata": {"name": app_name},
-                "spec": {
-                    "project": "default",
-                    "source": {"repoURL": repo_url, "path": app_path, "targetRevision": target_rev},
-                    "destination": {"server": "https://kubernetes.default.svc", "namespace": dest_ns},
-                    "syncPolicy": sync_policy,
-                },
-            }
-            result = argocd_api("post", "applications", payload)
-            if "error" not in result:
-                st.success(f"Application **{app_name}** created!")
-            else:
-                st.error(f"Error: {result.get('error')}")
+        repos_data = argo_get("/api/v1/repositories")
+        if repos_data and repos_data.get("items"):
+            import pandas as pd
+            repos = repos_data["items"]
+            st.dataframe(pd.DataFrame([{
+                "Repo": r.get("repo", ""),
+                "Type": r.get("type", "git"),
+                "Connected": r.get("connectionState", {}).get("status", ""),
+            } for r in repos]), use_container_width=True, hide_index=True)
+        else:
+            st.info("No repositories configured")
 
     with tab3:
-        st.subheader("Registered Repositories")
-        data = argocd_api("get", "repositories")
-        repos = data.get("items", []) if "error" not in data else []
-        if repos:
-            st.dataframe(
-                [{"Repo": r.get("repo"), "Type": r.get("type", "git"),
-                  "Status": r.get("connectionState", {}).get("status")} for r in repos],
-                use_container_width=True,
-            )
-        else:
-            st.info("No repositories registered.")
+        apps_data2 = argo_get("/api/v1/applications")
+        if apps_data2 and apps_data2.get("items"):
+            app_names = [a["metadata"]["name"] for a in apps_data2["items"]]
+            sel_app = st.selectbox("Select application to sync", app_names)
+            dry_run = st.checkbox("Dry run", value=False)
+            prune = st.checkbox("Prune resources", value=False)
+            if st.button("🔀 Sync Application", type="primary"):
+                payload = {"dryRun": dry_run, "prune": prune, "revision": "HEAD"}
+                code, resp = argo_post(f"/api/v1/applications/{sel_app}/sync", payload)
+                if code == 200:
+                    st.success(f"Sync triggered for {sel_app}")
+                else:
+                    st.error(f"Sync failed (HTTP {code}): {resp}")
 
-        st.divider()
-        st.subheader("Add Repository")
-        with st.form("add_repo"):
-            repo_url2 = st.text_input("Repository URL")
-            repo_user = st.text_input("Username (optional)")
-            repo_pass = st.text_input("Password (optional)", type="password")
-            submitted = st.form_submit_button("➕ Add Repository")
-        if submitted and repo_url2:
-            result = argocd_api("post", "repositories",
-                                {"repo": repo_url2, "username": repo_user,
-                                 "password": repo_pass, "insecure": True})
-            if "error" not in result:
-                st.success(f"Repository **{repo_url2}** added!")
-            else:
-                st.error(f"Error: {result.get('error')}")
+            if st.button("🔁 Sync All Apps"):
+                for app_name in app_names:
+                    code, _ = argo_post(f"/api/v1/applications/{app_name}/sync", {"revision": "HEAD"})
+                    if code == 200:
+                        st.success(f"✓ {app_name}")
+                    else:
+                        st.error(f"✗ {app_name} (HTTP {code})")
+        else:
+            st.info("No applications to sync")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 9 — TRIVY SCANNER
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🛡️ Trivy Scanner":
-    st.title("🛡️ Trivy Security Scanner")
-    st.caption("Scan container images and K8s workloads for CVEs and misconfigurations")
+elif active_page == "🛡️ Trivy Scanner":
+    page_header("🛡️", "Trivy Security Scanner", "Container image and IaC vulnerability scanning")
 
-    # Check trivy installed
-    import shutil as _shutil
-    trivy_ok = bool(_shutil.which("trivy"))
-    if trivy_ok:
-        r = subprocess.run(["trivy", "--version"], capture_output=True, text=True)
-        st.success(f"🟢 {r.stdout.strip().splitlines()[0] if r.stdout else 'trivy ready'}")
-    else:
-        st.error("🔴 trivy not installed. Run: `brew install trivy`")
+    if not shutil.which("trivy"):
+        st.warning("Trivy not installed — run `brew install trivy`")
         st.stop()
 
-    tab1, tab2, tab3 = st.tabs(["Image Scan", "K8s Namespace Scan", "Config/IaC Scan"])
+    ver_r = shell("trivy --version")
+    if ver_r["ok"]:
+        st.caption(f"Trivy {ver_r['out'].splitlines()[0]}")
+
+    tab1, tab2, tab3 = st.tabs(["🖼️ Image Scan", "📁 IaC Scan", "☸️ K8s Scan"])
 
     with tab1:
-        st.subheader("Scan Container Image")
-        col1, col2 = st.columns([3, 1])
-        image_name = col1.text_input("Image name", value="nginx:latest", key="trivy_img")
-        severity   = col2.multiselect("Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
-                                       default=["CRITICAL", "HIGH"])
-
-        if st.button("🔍 Scan Image", type="primary"):
-            sev_str = ",".join(severity) if severity else "CRITICAL,HIGH,MEDIUM,LOW"
-            with st.spinner(f"Scanning {image_name}..."):
-                proc = subprocess.run(
-                    ["trivy", "--quiet", "--format", "json", "image",
-                     "--severity", sev_str, image_name],
-                    capture_output=True, text=True, timeout=120,
-                )
-            try:
-                data = json.loads(proc.stdout) if proc.stdout.strip() else {}
-            except json.JSONDecodeError:
-                st.error(f"Parse error: {proc.stderr[:200]}")
-                data = {}
-
-            if data:
-                results = data.get("Results", [])
-                total = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-                all_vulns = []
-                for r in results:
-                    for v in (r.get("Vulnerabilities") or []):
-                        sev = v.get("Severity", "UNKNOWN")
-                        total[sev] = total.get(sev, 0) + 1
-                        all_vulns.append({
-                            "ID":      v.get("VulnerabilityID"),
-                            "Package": v.get("PkgName"),
-                            "Version": v.get("InstalledVersion"),
-                            "Fixed":   v.get("FixedVersion", "no fix"),
-                            "Severity": v.get("Severity"),
-                            "Title":   v.get("Title", "")[:60],
-                        })
-
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("CRITICAL", total.get("CRITICAL", 0), delta="🔴" if total.get("CRITICAL") else None)
-                c2.metric("HIGH",     total.get("HIGH", 0),     delta="🟠" if total.get("HIGH") else None)
-                c3.metric("MEDIUM",   total.get("MEDIUM", 0))
-                c4.metric("LOW",      total.get("LOW", 0))
-
-                if all_vulns:
-                    st.divider()
-                    st.subheader(f"Vulnerabilities ({len(all_vulns)} found)")
-                    st.dataframe(all_vulns, use_container_width=True)
-                else:
-                    st.success(f"No vulnerabilities found matching filter in **{image_name}**")
-            elif proc.returncode not in (0, 1):
-                st.error(f"Scan failed: {proc.stderr[:300]}")
+        image_input = st.text_input("Image to scan", value="nginx:latest", placeholder="e.g. nginx:latest, python:3.11")
+        severity = st.multiselect("Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"], default=["CRITICAL", "HIGH"])
+        if st.button("🔍 Scan Image", type="primary") and image_input:
+            sev_str = ",".join(severity) if severity else "CRITICAL,HIGH"
+            with st.spinner(f"Scanning {image_input}..."):
+                r = shell(f"trivy image --format json --severity {sev_str} {image_input}")
+            if r["ok"] or r["out"]:
+                try:
+                    data = json.loads(r["out"])
+                    results = data.get("Results", [])
+                    total_vulns = 0
+                    for result in results:
+                        vulns = result.get("Vulnerabilities") or []
+                        total_vulns += len(vulns)
+                        if vulns:
+                            st.markdown(f"**{result.get('Target', '')}** — {len(vulns)} vulnerabilities")
+                            import pandas as pd
+                            rows = [{
+                                "CVE":         v.get("VulnerabilityID", ""),
+                                "Package":     v.get("PkgName", ""),
+                                "Installed":   v.get("InstalledVersion", ""),
+                                "Fixed":       v.get("FixedVersion", ""),
+                                "Severity":    v.get("Severity", ""),
+                                "Title":       v.get("Title", "")[:60],
+                            } for v in vulns]
+                            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                    if total_vulns == 0:
+                        st.success(f"No vulnerabilities found in {image_input}")
+                    else:
+                        st.warning(f"Found {total_vulns} total vulnerabilities")
+                except Exception:
+                    st.code(r["out"][:3000], language="bash")
+            else:
+                st.error(r["err"][:500] if r["err"] else "Scan failed")
 
     with tab2:
-        st.subheader("Scan All Images in K8s Namespace")
-        ns_scan = st.text_input("Namespace", value="devops", key="trivy_ns")
+        path_input = st.text_input("Directory/file to scan", value=TF_WORKDIR)
+        if st.button("🔍 Scan IaC"):
+            with st.spinner("Scanning IaC configuration..."):
+                r = shell(f"trivy config --format json {path_input}")
+            if r["out"]:
+                try:
+                    data = json.loads(r["out"])
+                    results = data.get("Results", [])
+                    for result in results:
+                        misconfigs = result.get("Misconfigurations") or []
+                        if misconfigs:
+                            import pandas as pd
+                            st.markdown(f"**{result.get('Target', '')}** — {len(misconfigs)} findings")
+                            rows = [{
+                                "ID":       m.get("ID", ""),
+                                "Type":     m.get("Type", ""),
+                                "Severity": m.get("Severity", ""),
+                                "Title":    m.get("Title", "")[:60],
+                                "Status":   m.get("Status", ""),
+                            } for m in misconfigs]
+                            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                    if not any((r.get("Misconfigurations") or []) for r in results):
+                        st.success("No misconfigurations found")
+                except Exception:
+                    st.code(r["out"][:2000])
+            else:
+                st.error(r["err"][:500] if r["err"] else "Scan failed")
 
-        if st.button("🔍 Scan Namespace"):
-            # Get pod images
-            get_imgs = subprocess.run(
-                ["kubectl", "get", "pods", "-n", ns_scan,
-                 "-o", "jsonpath={.items[*].spec.containers[*].image}"],
-                capture_output=True, text=True,
+    with tab3:
+        st.info("K8s cluster scanning requires cluster access and can take several minutes.")
+        if st.button("🔍 Scan K8s Cluster"):
+            with st.spinner("Scanning cluster (this may take a while)..."):
+                r = shell("trivy k8s --report summary --format json cluster")
+            if r["out"]:
+                st.code(r["out"][:5000], language="json")
+            else:
+                st.error(r["err"][:500] if r["err"] else "Scan failed")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 10 — VAULT
+# ══════════════════════════════════════════════════════════════════════════════
+elif active_page == "🔐 Vault Secrets":
+    page_header("🔐", "Vault Secrets Manager", f"HashiCorp Vault · {VAULT_URL}")
+
+    if not port_up(30200):
+        st.info("Vault unreachable on port 30200 — check if the pod is running")
+        st.stop()
+
+    def vault_get(path):
+        return http_json(f"{VAULT_URL}/{path}", headers={"X-Vault-Token": VAULT_TOKEN} if False else None)
+
+    def vault_api(path):
+        import httpx
+        try:
+            r = httpx.get(f"{VAULT_URL}/{path}",
+                          headers={"X-Vault-Token": VAULT_TOKEN}, timeout=6)
+            if r.status_code < 400:
+                return r.json()
+        except Exception:
+            pass
+        return None
+
+    tab1, tab2, tab3 = st.tabs(["🏥 Health", "🔑 Secrets", "⚙️ Auth Methods"])
+
+    with tab1:
+        health = vault_api("v1/sys/health")
+        if health:
+            st.markdown(f"**Status:** {status_badge(not health.get('sealed', True), 'Unsealed', 'Sealed')}", unsafe_allow_html=True)
+            vm1, vm2, vm3 = st.columns(3)
+            vm1.metric("Initialized", str(health.get("initialized", "?")))
+            vm2.metric("Sealed",      str(health.get("sealed", "?")))
+            vm3.metric("Version",     health.get("version", "?"))
+
+            cluster = vault_api("v1/sys/leader")
+            if cluster:
+                st.markdown(f"**HA Enabled:** `{cluster.get('ha_enabled', False)}`")
+        else:
+            st.warning("Could not fetch Vault health")
+
+    with tab2:
+        mounts = vault_api("v1/sys/mounts")
+        if mounts:
+            mount_paths = [k.rstrip("/") for k in mounts.get("data", mounts).keys()
+                           if not k.startswith("sys") and not k.startswith("auth")]
+            if mount_paths:
+                sel_mount = st.selectbox("Secret mount", mount_paths)
+                secret_path = st.text_input("Secret path (relative to mount)", value="")
+                sp1, sp2 = st.columns(2)
+                if sp1.button("🔍 List Secrets"):
+                    data = vault_api(f"v1/{sel_mount}/metadata/{secret_path}?list=true")
+                    if data:
+                        keys = data.get("data", {}).get("keys", [])
+                        if keys:
+                            import pandas as pd
+                            st.dataframe(pd.DataFrame({"Secret Keys": keys}), use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No keys found at this path")
+                    else:
+                        st.info("Could not list secrets (check path/permissions)")
+                if sp2.button("🔓 Read Secret") and secret_path:
+                    data = vault_api(f"v1/{sel_mount}/data/{secret_path}")
+                    if data:
+                        st.json(data.get("data", {}).get("data", {}))
+                    else:
+                        st.error("Secret not found or access denied")
+            else:
+                st.info("No KV mounts found")
+        else:
+            st.info("Could not list secret mounts")
+
+    with tab3:
+        auth_methods = vault_api("v1/sys/auth")
+        if auth_methods:
+            data = auth_methods.get("data", auth_methods)
+            import pandas as pd
+            rows = []
+            for path, info in data.items():
+                rows.append({
+                    "Path":        path,
+                    "Type":        info.get("type", ""),
+                    "Description": info.get("description", ""),
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("Could not fetch auth methods")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 11 — LOKI LOGS
+# ══════════════════════════════════════════════════════════════════════════════
+elif active_page == "📜 Loki Logs":
+    page_header("📜", "Loki Log Aggregation", f"Distributed log management · {LOKI_URL}")
+
+    if not port_up(30310):
+        st.info("Loki unreachable on port 30310 — check if the pod is running")
+        st.stop()
+
+    tab1, tab2 = st.tabs(["🔍 Query Logs", "📊 Labels"])
+
+    with tab1:
+        label_data = http_json(f"{LOKI_URL}/loki/api/v1/labels")
+        labels = (label_data or {}).get("data", [])
+
+        col_q, col_t = st.columns([3, 1])
+        with col_q:
+            query = st.text_input("LogQL Query", value='{namespace="devops"}', placeholder='{app="jenkins"}')
+        with col_t:
+            limit = st.number_input("Limit", min_value=10, max_value=1000, value=100)
+
+        if st.button("🔍 Query", type="primary"):
+            import time as _time
+            now_ns = int(_time.time() * 1e9)
+            start_ns = now_ns - 3600 * int(1e9)
+            data = http_json(
+                f"{LOKI_URL}/loki/api/v1/query_range",
+                params={"query": query, "start": start_ns, "end": now_ns, "limit": limit}
             )
-            if get_imgs.returncode != 0:
-                st.error(f"kubectl error: {get_imgs.stderr[:200]}")
-            else:
-                images_list = list(set(get_imgs.stdout.split()))
-                if not images_list:
-                    st.info(f"No pods in namespace '{ns_scan}'")
+            if data and data.get("status") == "success":
+                results = data.get("data", {}).get("result", [])
+                if results:
+                    all_lines = []
+                    for stream in results:
+                        labels_str = str(stream.get("stream", {}))
+                        for ts, line in stream.get("values", []):
+                            import datetime
+                            dt = datetime.datetime.fromtimestamp(int(ts) / 1e9).strftime("%H:%M:%S")
+                            all_lines.append({"Time": dt, "Labels": labels_str[:40], "Log": line[:200]})
+                    if all_lines:
+                        import pandas as pd
+                        all_lines.sort(key=lambda x: x["Time"])
+                        st.dataframe(pd.DataFrame(all_lines), use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No log lines in the result")
                 else:
-                    st.info(f"Found {len(images_list)} unique images. Scanning...")
-                    scan_results = {}
-                    progress = st.progress(0)
-                    for i, img in enumerate(images_list):
-                        proc = subprocess.run(
-                            ["trivy", "--quiet", "--format", "json", "image",
-                             "--severity", "CRITICAL,HIGH", img],
-                            capture_output=True, text=True, timeout=120,
-                        )
-                        try:
-                            d = json.loads(proc.stdout) if proc.stdout.strip() else {}
-                            total = {"CRITICAL": 0, "HIGH": 0}
-                            for r in d.get("Results", []):
-                                for v in (r.get("Vulnerabilities") or []):
-                                    sev = v.get("Severity", "")
-                                    total[sev] = total.get(sev, 0) + 1
-                            scan_results[img] = total
-                        except Exception:
-                            scan_results[img] = {"error": "parse failed"}
-                        progress.progress((i + 1) / len(images_list))
-
-                    st.dataframe(
-                        [{"Image": img, **counts} for img, counts in scan_results.items()],
-                        use_container_width=True,
-                    )
-
-    with tab3:
-        st.subheader("Scan IaC / Config Files")
-        scan_path = st.text_input("Path to scan", value="k8s/")
-        if st.button("🔍 Scan Configs"):
-            with st.spinner(f"Scanning {scan_path}..."):
-                proc = subprocess.run(
-                    ["trivy", "--quiet", "--format", "json", "config", scan_path],
-                    capture_output=True, text=True, timeout=60,
-                )
-            try:
-                data = json.loads(proc.stdout) if proc.stdout.strip() else {}
-            except json.JSONDecodeError:
-                st.error(f"Parse error: {proc.stderr[:200]}")
-                data = {}
-
-            findings = []
-            for r in data.get("Results", []):
-                for m in (r.get("Misconfigurations") or []):
-                    findings.append({
-                        "File":       r.get("Target"),
-                        "ID":         m.get("ID"),
-                        "Title":      m.get("Title"),
-                        "Severity":   m.get("Severity"),
-                        "Message":    m.get("Message", "")[:100],
-                        "Resolution": m.get("Resolution", "")[:80],
-                    })
-
-            if findings:
-                st.warning(f"{len(findings)} misconfiguration(s) found")
-                st.dataframe(findings, use_container_width=True)
+                    st.info("No streams matched the query")
             else:
-                st.success("No misconfigurations found!")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 10 — HELM MANAGER
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "⛵ Helm Manager":
-    import shutil as _sh
-    st.title("⛵ Helm Manager")
-    st.caption("Manage Helm charts and releases")
-
-    if not _sh.which("helm"):
-        st.error("Helm not installed. Run: `brew install helm`")
-        st.stop()
-
-    def helm(args): return subprocess.run(["helm"] + args.split(), capture_output=True, text=True, timeout=60)
-
-    tab1, tab2, tab3, tab4 = st.tabs(["Releases", "Repositories", "Install / Upgrade", "History"])
-
-    with tab1:
-        st.subheader("All Helm Releases")
-        ns_h = st.text_input("Namespace", value="default", key="helm_ns")
-        all_ns = st.checkbox("All namespaces", key="helm_all_ns")
-        if st.button("🔄 List Releases", type="primary"):
-            cmd = f"list {'--all-namespaces' if all_ns else f'-n {ns_h}'}"
-            r = helm(cmd)
-            st.code(r.stdout or r.stderr, language="bash")
+                st.warning("Query returned no data or Loki is not ready")
 
     with tab2:
-        st.subheader("Configured Repositories")
-        if st.button("📋 List Repos"):
-            r = helm("repo list")
-            st.code(r.stdout or "No repositories configured", language="bash")
+        label_data = http_json(f"{LOKI_URL}/loki/api/v1/labels")
+        if label_data and label_data.get("data"):
+            labels = label_data["data"]
+            sel_label = st.selectbox("Label", labels)
+            if sel_label:
+                val_data = http_json(f"{LOKI_URL}/loki/api/v1/label/{sel_label}/values")
+                if val_data and val_data.get("data"):
+                    import pandas as pd
+                    st.dataframe(pd.DataFrame({"Values": val_data["data"]}), use_container_width=True, hide_index=True)
+        else:
+            st.info("No labels found — Loki may not have received any logs yet")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAGE 12 — HELM
+# ══════════════════════════════════════════════════════════════════════════════
+elif active_page == "⛵ Helm Manager":
+    page_header("⛵", "Helm Manager", "Kubernetes application package manager")
+
+    if not shutil.which("helm"):
+        st.warning("Helm not installed — run `brew install helm`")
+        st.stop()
+
+    ver_r = shell("helm version --short")
+    if ver_r["ok"]:
+        st.caption(ver_r["out"])
+
+    tab1, tab2, tab3 = st.tabs(["📦 Releases", "🗂️ Repos", "🔍 Search"])
+
+    with tab1:
+        ns_h = st.text_input("Namespace", value="devops", key="helm_ns")
+        r = shell(f"helm list -n {ns_h} --output json")
+        if r["ok"] and r["out"] and r["out"] != "[]":
+            try:
+                releases = json.loads(r["out"])
+                import pandas as pd
+                df = pd.DataFrame([{
+                    "Name":      rel.get("name", ""),
+                    "Namespace": rel.get("namespace", ""),
+                    "Revision":  rel.get("revision", ""),
+                    "Status":    rel.get("status", ""),
+                    "Chart":     rel.get("chart", ""),
+                    "App Ver":   rel.get("app_version", ""),
+                    "Updated":   rel.get("updated", "")[:16],
+                } for rel in releases])
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+                sel_rel = st.selectbox("Release for actions", [r["name"] for r in releases])
+                hc1, hc2 = st.columns(2)
+                if hc1.button("🗑 Uninstall"):
+                    with st.spinner(f"Uninstalling {sel_rel}..."):
+                        res = shell(f"helm uninstall {sel_rel} -n {ns_h}")
+                    show(res)
+                if hc2.button("🔄 Rollback"):
+                    res = shell(f"helm rollback {sel_rel} -n {ns_h}")
+                    show(res)
+            except Exception:
+                st.code(r["out"])
+        else:
+            st.info(f"No Helm releases in namespace '{ns_h}'")
+
+    with tab2:
+        r = shell("helm repo list --output json")
+        if r["ok"] and r["out"] and r["out"] != "[]":
+            try:
+                repos = json.loads(r["out"])
+                import pandas as pd
+                st.dataframe(pd.DataFrame([{
+                    "Name": repo.get("name", ""),
+                    "URL":  repo.get("url", ""),
+                } for repo in repos]), use_container_width=True, hide_index=True)
+            except Exception:
+                st.code(r["out"])
+        else:
+            st.info("No Helm repos configured")
 
         st.divider()
-        st.subheader("Add Repository")
+        st.markdown("##### Add Repository")
         with st.form("add_repo"):
-            repo_name = st.text_input("Repo name", placeholder="bitnami")
-            repo_url  = st.text_input("Repo URL", placeholder="https://charts.bitnami.com/bitnami")
-            if st.form_submit_button("➕ Add & Update"):
+            repo_name = st.text_input("Repo name")
+            repo_url  = st.text_input("Repo URL", placeholder="https://charts.helm.sh/stable")
+            if st.form_submit_button("➕ Add Repo") and repo_name and repo_url:
                 with st.spinner("Adding repo..."):
-                    r = helm(f"repo add {repo_name} {repo_url}")
-                    helm("repo update")
-                if r.returncode == 0:
-                    st.success(f"Repo '{repo_name}' added")
-                else:
-                    st.error(r.stderr)
-
-        st.divider()
-        st.subheader("Search Charts")
-        keyword = st.text_input("Search keyword", key="helm_search")
-        if st.button("🔍 Search") and keyword:
-            r = helm(f"search repo {keyword}")
-            st.code(r.stdout or "No results", language="bash")
+                    res = shell(f"helm repo add {repo_name} {repo_url} && helm repo update")
+                show(res, f"Repo '{repo_name}' added successfully")
 
     with tab3:
-        st.subheader("Install / Upgrade Chart")
-        with st.form("helm_install"):
-            col1, col2 = st.columns(2)
-            rel_name  = col1.text_input("Release name", placeholder="my-nginx")
-            chart     = col2.text_input("Chart", placeholder="bitnami/nginx")
-            col3, col4 = st.columns(2)
-            ns_i      = col3.text_input("Namespace", value="default")
-            version   = col4.text_input("Version (optional)")
-            values_yaml = st.text_area("Values override (YAML)", height=100,
-                                       placeholder="replicaCount: 2\nservice:\n  type: NodePort")
-            upgrade   = st.checkbox("Upgrade if exists (--install)", value=True)
-            submitted = st.form_submit_button("🚀 Deploy")
-            if submitted and rel_name and chart:
-                import tempfile, os as _os
-                args = ["upgrade" if upgrade else "install", rel_name, chart, "-n", ns_i]
-                if upgrade: args.append("--install")
-                if version: args += ["--version", version]
-                tmp = None
-                if values_yaml.strip():
-                    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-                        f.write(values_yaml); tmp = f.name
-                    args += ["-f", tmp]
-                with st.spinner(f"Deploying {rel_name}..."):
-                    r = subprocess.run(["helm"] + args, capture_output=True, text=True, timeout=120)
-                if tmp: _os.unlink(tmp)
-                if r.returncode == 0:
-                    st.success(f"Release '{rel_name}' deployed!")
-                    st.code(r.stdout, language="bash")
-                else:
-                    st.error(r.stderr)
-
-        st.divider()
-        st.subheader("Uninstall Release")
-        with st.form("helm_uninstall"):
-            del_name = st.text_input("Release name to uninstall")
-            del_ns   = st.text_input("Namespace", value="default")
-            if st.form_submit_button("🗑 Uninstall", type="primary"):
-                r = subprocess.run(["helm", "uninstall", del_name, "-n", del_ns],
-                                   capture_output=True, text=True, timeout=60)
-                if r.returncode == 0:
-                    st.success(f"Release '{del_name}' uninstalled")
-                else:
-                    st.error(r.stderr)
-
-    with tab4:
-        st.subheader("Release History & Rollback")
-        with st.form("helm_history"):
-            hist_name = st.text_input("Release name")
-            hist_ns   = st.text_input("Namespace", value="default")
-            if st.form_submit_button("📜 Get History"):
-                r = subprocess.run(["helm", "history", hist_name, "-n", hist_ns],
-                                   capture_output=True, text=True, timeout=30)
-                st.code(r.stdout or r.stderr, language="bash")
-
-        with st.form("helm_rollback"):
-            rb_name = st.text_input("Release name", key="rb_name")
-            rb_rev  = st.number_input("Revision (0 = previous)", min_value=0, value=0)
-            rb_ns   = st.text_input("Namespace", value="default", key="rb_ns")
-            if st.form_submit_button("⏮ Rollback"):
-                r = subprocess.run(["helm", "rollback", rb_name, str(rb_rev), "-n", rb_ns],
-                                   capture_output=True, text=True, timeout=60)
-                if r.returncode == 0:
-                    st.success(f"Rolled back '{rb_name}' to revision {rb_rev or 'previous'}")
-                else:
-                    st.error(r.stderr)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 11 — VAULT
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "🔐 Vault Secrets":
-    st.title("🔐 HashiCorp Vault")
-    st.caption(f"Endpoint: {VAULT_URL} | Token: `root` (dev mode)")
-
-    import httpx as _hx
-    _vh = {"X-Vault-Token": VAULT_TOKEN, "Content-Type": "application/json"}
-
-    def v_get(path):
-        try:
-            r = _hx.get(f"{VAULT_URL}/v1/{path}", headers=_vh, timeout=8)
-            return r.json()
-        except Exception as e:
-            return {"error": str(e)}
-
-    def v_post(path, data):
-        try:
-            r = _hx.post(f"{VAULT_URL}/v1/{path}", headers=_vh, json=data, timeout=8)
-            return r.json() if r.text else {"status": r.status_code}
-        except Exception as e:
-            return {"error": str(e)}
-
-    # Health check
-    try:
-        _vr = _hx.get(f"{VAULT_URL}/v1/sys/health", timeout=5)
-        _vd = _vr.json()
-        if not _vd.get("sealed", True):
-            st.success(f"🟢 Vault Unsealed | Version: {_vd.get('version')} | Cluster: {_vd.get('cluster_name','dev')}")
-        else:
-            st.error("🔴 Vault is sealed")
-    except Exception as _e:
-        st.error(f"🔴 Vault unreachable: {_e}")
-        st.stop()
-
-    tab1, tab2, tab3, tab4 = st.tabs(["Secrets", "Write Secret", "Policies", "Auth & Tokens"])
-
-    with tab1:
-        st.subheader("Browse Secrets")
-        secret_path = st.text_input("Path (list)", value="secret", key="v_list_path")
-        if st.button("📋 List", key="v_list"):
-            res = v_get(f"{secret_path}?list=true")
-            keys = res.get("data", {}).get("keys", [])
-            if keys:
-                for k in keys:
-                    st.markdown(f"- `{k}`")
+        search_term = st.text_input("Search charts", placeholder="nginx, prometheus, postgres...")
+        if st.button("🔍 Search") and search_term:
+            r = shell(f"helm search hub {search_term} --max-col-width=60 --output json")
+            if r["ok"] and r["out"] and r["out"] != "null":
+                try:
+                    charts = json.loads(r["out"])
+                    import pandas as pd
+                    st.dataframe(pd.DataFrame([{
+                        "URL":         c.get("url", ""),
+                        "Version":     c.get("version", ""),
+                        "App Version": c.get("app_version", ""),
+                        "Description": c.get("description", "")[:80],
+                    } for c in (charts or [])[:30]]), use_container_width=True, hide_index=True)
+                except Exception:
+                    st.code(r["out"][:2000])
             else:
-                st.info(f"No secrets at '{secret_path}'")
-
-        st.divider()
-        st.subheader("Read Secret")
-        read_path = st.text_input("Full path", value="secret/myapp", key="v_read_path")
-        if st.button("🔍 Read", key="v_read"):
-            res = v_get(read_path)
-            data = res.get("data", {})
-            if "data" in data: data = data["data"]
-            if data and "error" not in res:
-                for k, v in data.items():
-                    st.code(f"{k} = {v}")
-            else:
-                st.warning(res.get("errors", ["Secret not found"])[0] if "errors" in res else "Not found")
-
-    with tab2:
-        st.subheader("Write Secret")
-        with st.form("vault_write"):
-            w_path = st.text_input("Path", value="secret/data/myapp",
-                                   help="KV v2: secret/data/myapp | KV v1: secret/myapp")
-            w_key   = st.text_input("Key")
-            w_value = st.text_input("Value", type="password")
-            if st.form_submit_button("💾 Write"):
-                payload = {"data": {w_key: w_value}} if "secret/data/" in w_path else {w_key: w_value}
-                res = v_post(w_path, payload)
-                if "error" not in res:
-                    st.success(f"Secret written to `{w_path}`")
-                else:
-                    st.error(res["error"])
-
-        st.divider()
-        st.subheader("Secret Engines")
-        if st.button("📋 List Engines"):
-            res = v_get("sys/mounts")
-            for path, info in res.items():
-                if isinstance(info, dict) and "type" in info:
-                    st.markdown(f"- `{path}` → **{info['type']}** {info.get('description','')}")
-
-    with tab3:
-        st.subheader("Policies")
-        if st.button("📋 List Policies"):
-            res = v_get("sys/policy")
-            for p in res.get("policies", []):
-                st.markdown(f"- `{p}`")
-
-        st.divider()
-        st.subheader("Read Policy")
-        pol_name = st.text_input("Policy name", value="default")
-        if st.button("🔍 Read Policy"):
-            res = v_get(f"sys/policy/{pol_name}")
-            st.code(res.get("rules", "No rules"), language="hcl")
-
-        st.divider()
-        st.subheader("Write Policy")
-        with st.form("vault_policy"):
-            np_name  = st.text_input("Policy name")
-            np_rules = st.text_area("HCL rules",
-                value='path "secret/*" {\n  capabilities = ["read", "list"]\n}', height=150)
-            if st.form_submit_button("💾 Save Policy"):
-                import httpx as _hx2
-                r = _hx2.put(f"{VAULT_URL}/v1/sys/policy/{np_name}",
-                             headers=_vh, json={"rules": np_rules}, timeout=8)
-                if r.status_code == 204:
-                    st.success(f"Policy '{np_name}' saved")
-                else:
-                    st.error(r.text)
-
-    with tab4:
-        st.subheader("Create Token")
-        with st.form("vault_token"):
-            t_policies = st.multiselect("Policies", ["default", "root"], default=["default"])
-            t_ttl      = st.text_input("TTL", value="24h")
-            t_name     = st.text_input("Display name", value="mcp-token")
-            if st.form_submit_button("🔑 Create Token"):
-                res = v_post("auth/token/create", {"policies": t_policies, "ttl": t_ttl, "display_name": t_name})
-                if "auth" in res:
-                    st.success("Token created!")
-                    st.code(res["auth"]["client_token"])
-                    st.info(f"TTL: {res['auth']['lease_duration']}s | Policies: {res['auth']['policies']}")
-                else:
-                    st.error(str(res))
-
-        st.divider()
-        st.subheader("Auth Methods")
-        if st.button("📋 List Auth Methods"):
-            res = v_get("sys/auth")
-            for path, info in res.items():
-                if isinstance(info, dict) and "type" in info:
-                    st.markdown(f"- `{path}` → **{info['type']}**")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PAGE 12 — LOKI LOGS
-# ══════════════════════════════════════════════════════════════════════════════
-elif page == "📜 Loki Logs":
-    st.title("📜 Loki Log Explorer")
-    st.caption(f"Endpoint: {LOKI_URL}")
-
-    import httpx as _hx
-    import time as _time
-
-    try:
-        _lr = _hx.get(f"{LOKI_URL}/ready", timeout=5)
-        if _lr.status_code == 200:
-            st.success("🟢 Loki is ready")
-        else:
-            st.error(f"🔴 Loki not ready: HTTP {_lr.status_code}")
-    except Exception as _e:
-        st.error(f"🔴 Loki unreachable: {_e}")
-        st.stop()
-
-    def loki_query(logql, limit=100, since_h=1):
-        end = int(_time.time() * 1e9)
-        start = int((_time.time() - since_h * 3600) * 1e9)
-        try:
-            r = _hx.get(f"{LOKI_URL}/loki/api/v1/query_range",
-                        params={"query": logql, "limit": limit, "start": start,
-                                "end": end, "direction": "backward"}, timeout=20)
-            return r.json()
-        except Exception as e:
-            return {"error": str(e)}
-
-    tab1, tab2, tab3 = st.tabs(["Query Logs", "Labels", "Error Monitor"])
-
-    with tab1:
-        st.subheader("LogQL Query")
-        col1, col2, col3 = st.columns([3, 1, 1])
-        logql   = col1.text_input("LogQL", value='{namespace="devops"}', key="loki_q")
-        since_h = col2.number_input("Hours back", 1, 72, value=1)
-        limit   = col3.number_input("Limit", 10, 500, value=50)
-
-        if st.button("🔍 Query Logs", type="primary"):
-            with st.spinner("Querying Loki..."):
-                res = loki_query(logql, limit=int(limit), since_h=int(since_h))
-            if "error" in res:
-                st.error(res["error"])
-            else:
-                streams = res.get("data", {}).get("result", [])
-                if not streams:
-                    st.info("No logs found")
-                else:
-                    lines = []
-                    for stream in streams:
-                        labels = stream.get("stream", {})
-                        ns  = labels.get("namespace", "?")
-                        pod = labels.get("pod", labels.get("app", "?"))
-                        for ts, log in stream.get("values", []):
-                            t = _time.strftime("%H:%M:%S", _time.localtime(int(ts) // 1_000_000_000))
-                            lines.append(f"{t} [{ns}/{pod}] {log}")
-                    st.code("\n".join(lines[:int(limit)]), language="bash")
-
-        st.divider()
-        st.subheader("Quick Filters")
-        col_a, col_b = st.columns(2)
-        app_filter = col_a.text_input("App label", placeholder="jenkins")
-        kw_filter  = col_b.text_input("Keyword filter", placeholder="error")
-
-        if st.button("🔍 Quick Search"):
-            base = f'{{namespace="devops"{f", app=\"{app_filter}\"" if app_filter else ""}}}'
-            q = f'{base} |= "{kw_filter}"' if kw_filter else base
-            with st.spinner("Searching..."):
-                res = loki_query(q, limit=50, since_h=2)
-            streams = res.get("data", {}).get("result", [])
-            lines = []
-            for stream in streams:
-                labels = stream.get("stream", {})
-                for ts, log in stream.get("values", []):
-                    t = _time.strftime("%H:%M:%S", _time.localtime(int(ts) // 1_000_000_000))
-                    lines.append(f"{t} [{labels.get('pod','?')}] {log}")
-            if lines:
-                st.code("\n".join(lines), language="bash")
-            else:
-                st.info("No matching logs")
-
-    with tab2:
-        st.subheader("Available Labels")
-        if st.button("📋 List Labels"):
-            try:
-                r = _hx.get(f"{LOKI_URL}/loki/api/v1/labels", timeout=8)
-                labels = r.json().get("data", [])
-                cols = st.columns(4)
-                for i, l in enumerate(labels):
-                    cols[i % 4].markdown(f"- `{l}`")
-            except Exception as e:
-                st.error(str(e))
-
-        st.divider()
-        label_sel = st.text_input("Get values for label", value="namespace")
-        if st.button("🔍 Get Values"):
-            try:
-                r = _hx.get(f"{LOKI_URL}/loki/api/v1/label/{label_sel}/values", timeout=8)
-                vals = r.json().get("data", [])
-                for v in vals:
-                    st.markdown(f"- `{v}`")
-            except Exception as e:
-                st.error(str(e))
-
-    with tab3:
-        st.subheader("Error Monitor — Last 1h")
-        if st.button("🚨 Check Errors", type="primary"):
-            with st.spinner("Scanning for errors..."):
-                res = loki_query('{namespace="devops"} |~ "(?i)(error|exception|fatal|panic)"', limit=100, since_h=1)
-            streams = res.get("data", {}).get("result", [])
-            if not streams:
-                st.success("✅ No errors in the last hour!")
-            else:
-                lines = []
-                for stream in streams:
-                    labels = stream.get("stream", {})
-                    pod = labels.get("pod", labels.get("app", "?"))
-                    for ts, log in stream.get("values", []):
-                        t = _time.strftime("%H:%M:%S", _time.localtime(int(ts) // 1_000_000_000))
-                        lines.append(f"{t} [{pod}] {log}")
-                st.warning(f"⚠️ {len(lines)} error log entries found")
-                st.code("\n".join(lines), language="bash")
+                st.info("No charts found")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 13 — CONTAINER REGISTRY
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "📦 Container Registry":
-    st.title("📦 Container Registry")
-    st.caption(f"API: {REGISTRY_URL} | UI: {REGISTRY_UI_URL}")
+elif active_page == "📦 Container Registry":
+    page_header("📦", "Container Registry", f"Private Docker registry · {REGISTRY_URL}")
 
-    import httpx as _hx
+    reg_up = port_up(30880, "127.0.0.1")
+    st.markdown(f"**Registry API:** {status_badge(reg_up)}", unsafe_allow_html=True)
 
-    try:
-        r = _hx.get(f"{REGISTRY_URL}/v2/", timeout=5)
-        st.success(f"🟢 Registry healthy | UI: [{REGISTRY_UI_URL}]({REGISTRY_UI_URL})")
-    except Exception as e:
-        st.error(f"🔴 Registry unreachable: {e}")
-        st.stop()
+    if reg_up:
+        st.link_button("🌐 Open Registry UI", REGISTRY_UI_URL)
 
-    tab1, tab2, tab3 = st.tabs(["Browse", "Delete Image", "Push Instructions"])
+    tab1, tab2 = st.tabs(["📦 Repositories", "🏷️ Tags"])
 
     with tab1:
-        st.subheader("Repositories")
-        if st.button("📋 List Repositories", type="primary"):
-            r = _hx.get(f"{REGISTRY_URL}/v2/_catalog", timeout=8)
-            repos = r.json().get("repositories", [])
-            if repos:
-                for repo in repos:
-                    with st.expander(f"📦 {repo}"):
-                        tr = _hx.get(f"{REGISTRY_URL}/v2/{repo}/tags/list", timeout=8)
-                        tags = tr.json().get("tags", []) or []
-                        for tag in tags:
-                            st.markdown(f"  - `{repo}:{tag}`")
-            else:
-                st.info("No images pushed yet")
-                st.markdown("**Push your first image:**")
-                st.code(f"docker tag myapp:latest 127.0.0.1:30880/myapp:latest\ndocker push 127.0.0.1:30880/myapp:latest", language="bash")
+        if reg_up:
+            @st.cache_data(ttl=30)
+            def get_registry_repos():
+                return http_json(f"{REGISTRY_URL}/v2/_catalog")
 
-        st.divider()
-        st.subheader("Image Tags")
-        repo_name = st.text_input("Repository name", placeholder="myapp")
-        if st.button("🔍 List Tags") and repo_name:
-            r = _hx.get(f"{REGISTRY_URL}/v2/{repo_name}/tags/list", timeout=8)
-            tags = r.json().get("tags", []) or []
-            if tags:
-                st.dataframe([{"Tag": t, "Pull": f"docker pull 127.0.0.1:30880/{repo_name}:{t}"} for t in tags],
-                             use_container_width=True)
+            data = get_registry_repos()
+            if data and data.get("repositories"):
+                repos = data["repositories"]
+                st.metric("Repositories", len(repos))
+                import pandas as pd
+                st.dataframe(pd.DataFrame({"Repository": repos}), use_container_width=True, hide_index=True)
             else:
-                st.info("No tags found")
+                st.info("No repositories in registry yet — push an image to get started")
+                st.code(f"""# Push an image to the registry:
+docker tag myapp:latest 127.0.0.1:30880/myapp:latest
+docker push 127.0.0.1:30880/myapp:latest""", language="bash")
+        else:
+            st.info("Registry unreachable on port 30880")
 
     with tab2:
-        st.subheader("Delete Image Tag")
-        st.warning("Deletion removes the manifest. Run garbage-collect to free disk space.")
-        with st.form("del_image"):
-            del_repo = st.text_input("Repository")
-            del_tag  = st.text_input("Tag", value="latest")
-            if st.form_submit_button("🗑 Delete", type="primary"):
-                # Get digest first
-                mr = _hx.get(f"{REGISTRY_URL}/v2/{del_repo}/manifests/{del_tag}",
-                             headers={"Accept": "application/vnd.docker.distribution.manifest.v2+json"},
-                             timeout=8)
-                digest = mr.headers.get("Docker-Content-Digest")
-                if digest:
-                    dr = _hx.delete(f"{REGISTRY_URL}/v2/{del_repo}/manifests/{digest}", timeout=8)
-                    if dr.status_code == 202:
-                        st.success(f"Deleted `{del_repo}:{del_tag}`")
-                    else:
-                        st.error(f"Delete failed: HTTP {dr.status_code}")
-                else:
-                    st.error("Could not get image digest")
-
-    with tab3:
-        st.subheader("How to Push Images")
-        st.info("This registry runs without TLS — add it as an insecure registry in Docker Desktop settings.")
-        st.code("""# 1. Add to Docker Desktop → Settings → Docker Engine:
-{
-  "insecure-registries": ["127.0.0.1:30880"]
-}
-
-# 2. Tag & push
-docker tag myapp:latest 127.0.0.1:30880/myapp:latest
-docker push 127.0.0.1:30880/myapp:latest
-
-# 3. Pull in K8s pod spec
-image: 127.0.0.1:30880/myapp:latest""", language="bash")
+        repo_name = st.text_input("Repository name", placeholder="myapp")
+        if st.button("🏷️ List Tags") and repo_name and reg_up:
+            data = http_json(f"{REGISTRY_URL}/v2/{repo_name}/tags/list")
+            if data and data.get("tags"):
+                import pandas as pd
+                st.dataframe(pd.DataFrame({"Tag": data["tags"]}), use_container_width=True, hide_index=True)
+            else:
+                st.info(f"No tags found for '{repo_name}'")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 14 — MINIO
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🗄️ MinIO Storage":
-    st.title("🗄️ MinIO Object Storage")
-    st.caption(f"API: {MINIO_URL} | Console: [{MINIO_CONSOLE_URL}]({MINIO_CONSOLE_URL})")
+elif active_page == "🗄️ MinIO Storage":
+    page_header("🗄️", "MinIO Object Storage", f"S3-compatible storage · {MINIO_URL}")
 
-    import httpx as _hx
+    minio_alive = port_up(30920)
+    st.markdown(f"**MinIO API:** {status_badge(minio_alive)}", unsafe_allow_html=True)
 
-    try:
-        r = _hx.get(f"{MINIO_URL}/minio/health/ready", timeout=5)
-        if r.status_code == 200:
-            st.success(f"🟢 MinIO healthy | Console: {MINIO_CONSOLE_URL}")
-        else:
-            st.error(f"🔴 MinIO not ready: HTTP {r.status_code}")
-            st.stop()
-    except Exception as e:
-        st.error(f"🔴 MinIO unreachable: {e}")
-        st.stop()
+    if minio_alive:
+        st.link_button("🌐 Open MinIO Console", MINIO_CONSOLE_URL)
 
-    def mc(args):
-        import subprocess as _sp
-        _sp.run(["mc", "alias", "set", "myminio", MINIO_URL, "admin", "Admin@123456789@"],
-                capture_output=True, timeout=10)
-        r = _sp.run(["mc", "--json"] + args.split(), capture_output=True, text=True, timeout=30)
-        return r.stdout, r.stderr, r.returncode
-
-    mc_ok = bool(__import__("shutil").which("mc"))
-
-    tab1, tab2, tab3 = st.tabs(["Buckets", "Objects", "Settings"])
+    tab1, tab2 = st.tabs(["🪣 Buckets", "ℹ️ Info"])
 
     with tab1:
-        st.subheader("Buckets")
-        if st.button("📋 List Buckets", type="primary"):
-            if mc_ok:
-                out, err, rc = mc("ls myminio")
-                import json as _j
-                lines = []
-                for line in out.splitlines():
+        if shutil.which("mc"):
+            if st.button("📋 List Buckets"):
+                with st.spinner("Fetching buckets..."):
+                    r = shell("mc ls local/ --json")
+                if r["ok"] and r["out"]:
                     try:
-                        d = _j.loads(line)
-                        lines.append({"Bucket": d.get("key",""), "Type": d.get("type","")})
+                        lines = [json.loads(l) for l in r["out"].splitlines() if l.strip()]
+                        import pandas as pd
+                        st.dataframe(pd.DataFrame([{
+                            "Bucket":    l.get("key", ""),
+                            "Modified":  l.get("lastModified", ""),
+                        } for l in lines]), use_container_width=True, hide_index=True)
                     except Exception:
-                        if line.strip(): lines.append({"Bucket": line, "Type": ""})
-                if lines:
-                    st.dataframe(lines, use_container_width=True)
+                        st.code(r["out"])
                 else:
-                    st.info("No buckets found")
-            else:
-                st.warning("`mc` not installed. Run: `brew install minio-mc`")
-                st.markdown(f"Open the MinIO Console at [{MINIO_CONSOLE_URL}]({MINIO_CONSOLE_URL}) to manage buckets.")
-
-        st.divider()
-        st.subheader("Create Bucket")
-        with st.form("create_bucket"):
-            bucket_name = st.text_input("Bucket name")
-            if st.form_submit_button("➕ Create"):
-                if mc_ok:
-                    _, err, rc = mc(f"mb myminio/{bucket_name}")
-                    if rc == 0:
-                        st.success(f"Bucket '{bucket_name}' created")
-                    else:
-                        st.error(err)
-                else:
-                    st.warning("Install `mc` to create buckets via CLI")
+                    st.info("No buckets found or mc not configured")
+        else:
+            st.info("MinIO Client (`mc`) not installed — `brew install minio/stable/mc`")
+            if minio_alive:
+                st.code("""# Configure mc:
+mc alias set local http://localhost:30920 minioadmin minioadmin""", language="bash")
 
     with tab2:
-        st.subheader("Browse Objects")
-        b_name = st.text_input("Bucket name", key="minio_browse")
-        if st.button("📂 List Objects") and b_name:
-            if mc_ok:
-                out, err, rc = mc(f"ls myminio/{b_name}")
-                import json as _j
-                lines = []
-                for line in out.splitlines():
-                    try:
-                        d = _j.loads(line)
-                        lines.append({"Object": d.get("key",""), "Size": d.get("size",0), "Modified": d.get("lastModified","")[:19]})
-                    except Exception:
-                        if line.strip(): lines.append({"Object": line, "Size": 0, "Modified": ""})
-                if lines:
-                    st.dataframe(lines, use_container_width=True)
-                else:
-                    st.info("No objects in bucket")
-            else:
-                st.warning("Install `mc`: `brew install minio-mc`")
-
-    with tab3:
-        st.subheader("Connection Info")
-        st.code(f"""# MinIO credentials
-Access Key: admin
-Secret Key: Admin@123456789@
-API:        {MINIO_URL}
-Console:    {MINIO_CONSOLE_URL}
-
-# Configure mc client
-mc alias set myminio {MINIO_URL} admin Admin@123456789@
-
-# S3 compatible endpoint (for Terraform, etc.)
-endpoint = "{MINIO_URL}"
-access_key = "admin"
-secret_key = "Admin@123456789@"
-""", language="bash")
+        if minio_alive:
+            health = http_json(f"{MINIO_URL}/minio/health/live")
+            st.markdown("**API Health:** " + status_badge(health is not None or port_up(30920)), unsafe_allow_html=True)
+        st.markdown(f"""
+**API Endpoint:** `{MINIO_URL}`
+**Console:** `{MINIO_CONSOLE_URL}`
+**Default Credentials:** `minioadmin / minioadmin`
+        """)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE 15 — NEXUS
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "🏛️ Nexus Repository":
-    st.title("🏛️ Nexus Repository Manager")
-    st.caption(f"URL: {NEXUS_URL}")
+elif active_page == "🏛️ Nexus Repository":
+    page_header("🏛️", "Nexus Repository Manager", f"Artifact repository · {NEXUS_URL}")
 
-    import httpx as _hx
+    nexus_alive = port_up(30081)
+    st.markdown(f"**Nexus:** {status_badge(nexus_alive)}", unsafe_allow_html=True)
 
-    try:
-        r = _hx.get(f"{NEXUS_URL}/service/rest/v1/status", auth=NEXUS_AUTH, timeout=8)
-        if r.status_code == 200:
-            st.success("🟢 Nexus is healthy")
-        else:
-            st.error(f"🔴 Nexus: HTTP {r.status_code}")
-            st.stop()
-    except Exception as e:
-        st.error(f"🔴 Nexus unreachable: {e}")
-        st.stop()
+    if nexus_alive:
+        st.link_button("🌐 Open Nexus UI", NEXUS_URL)
 
-    def nx_get(path, params={}):
-        try:
-            r = _hx.get(f"{NEXUS_URL}/service/rest{path}", auth=NEXUS_AUTH, params=params, timeout=10)
-            return r.json() if r.text else {}
-        except Exception as e:
-            return {"error": str(e)}
-
-    def nx_post(path, data):
-        try:
-            r = _hx.post(f"{NEXUS_URL}/service/rest{path}", auth=NEXUS_AUTH, json=data,
-                         headers={"Content-Type": "application/json"}, timeout=10)
-            return r.status_code, r.text
-        except Exception as e:
-            return 0, str(e)
-
-    tab1, tab2, tab3, tab4 = st.tabs(["Repositories", "Search", "Create Repo", "Users"])
+    tab1, tab2, tab3 = st.tabs(["📦 Repositories", "🔍 Search", "ℹ️ System"])
 
     with tab1:
-        st.subheader("All Repositories")
-        if st.button("📋 List Repositories", type="primary"):
-            res = nx_get("/v1/repositories")
-            repos = res if isinstance(res, list) else []
-            if repos:
-                df = [{"Name": r["name"], "Format": r.get("format","?"),
-                       "Type": r.get("type","?"), "URL": r.get("url","")} for r in repos]
-                st.dataframe(df, use_container_width=True)
+        if nexus_alive:
+            @st.cache_data(ttl=60)
+            def get_nexus_repos():
+                return http_json(f"{NEXUS_URL}/service/rest/v1/repositories", auth=NEXUS_AUTH)
+
+            data = get_nexus_repos()
+            if data:
+                import pandas as pd
+                st.metric("Total Repositories", len(data))
+                st.dataframe(pd.DataFrame([{
+                    "Name":   r.get("name", ""),
+                    "Format": r.get("format", ""),
+                    "Type":   r.get("type", ""),
+                    "URL":    r.get("url", ""),
+                } for r in data]), use_container_width=True, hide_index=True)
             else:
-                st.info("No repositories or error loading")
+                st.info("No repositories found or access denied")
+        else:
+            st.info("Nexus unreachable on port 30081")
 
     with tab2:
-        st.subheader("Search Components")
-        col1, col2 = st.columns(2)
-        repo_s   = col1.text_input("Repository (optional)")
-        keyword  = col2.text_input("Keyword")
-        if st.button("🔍 Search") and keyword:
-            params = {"keyword": keyword}
-            if repo_s: params["repository"] = repo_s
-            res = nx_get("/v1/search", params)
-            items = res.get("items", [])
-            if items:
-                df = [{"Group": c.get("group",""), "Name": c.get("name",""),
-                       "Version": c.get("version",""), "Repository": c.get("repository","")}
-                      for c in items[:30]]
-                st.dataframe(df, use_container_width=True)
-            else:
-                st.info("No components found")
+        if nexus_alive:
+            search_q = st.text_input("Search components", placeholder="e.g. spring-boot, junit")
+            if st.button("🔍 Search") and search_q:
+                data = http_json(f"{NEXUS_URL}/service/rest/v1/search?q={search_q}", auth=NEXUS_AUTH)
+                if data and data.get("items"):
+                    import pandas as pd
+                    rows = []
+                    for item in data["items"][:50]:
+                        rows.append({
+                            "Repository": item.get("repository", ""),
+                            "Format":     item.get("format", ""),
+                            "Group":      item.get("group", ""),
+                            "Name":       item.get("name", ""),
+                            "Version":    item.get("version", ""),
+                        })
+                    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                else:
+                    st.info("No components found")
+        else:
+            st.info("Nexus unreachable")
 
     with tab3:
-        st.subheader("Create Hosted Repository")
-        with st.form("nexus_create_repo"):
-            rn = st.text_input("Repository name")
-            rf = st.selectbox("Format", ["maven2", "npm", "pypi", "raw", "docker", "helm"])
-            if st.form_submit_button("➕ Create"):
-                payload = {
-                    "name": rn, "online": True,
-                    "storage": {"blobStoreName": "default", "strictContentTypeValidation": True, "writePolicy": "allow"},
-                }
-                if rf == "maven2":
-                    payload["maven"] = {"versionPolicy": "MIXED", "layoutPolicy": "STRICT"}
-                code, resp = nx_post(f"/v1/repositories/{rf}/hosted", payload)
-                if code in [200, 201]:
-                    st.success(f"Repository '{rn}' ({rf}) created!")
-                else:
-                    st.error(f"HTTP {code}: {resp[:300]}")
-
-        st.divider()
-        st.subheader("Create Proxy Repository")
-        with st.form("nexus_proxy_repo"):
-            pn = st.text_input("Repository name", placeholder="npm-proxy")
-            pf = st.selectbox("Format", ["npm", "maven2", "pypi", "raw"], key="pf")
-            pu = st.text_input("Remote URL", placeholder="https://registry.npmjs.org")
-            if st.form_submit_button("➕ Create Proxy"):
-                payload = {
-                    "name": pn, "online": True,
-                    "storage": {"blobStoreName": "default", "strictContentTypeValidation": True},
-                    "proxy": {"remoteUrl": pu, "contentMaxAge": 1440, "metadataMaxAge": 1440},
-                    "negativeCache": {"enabled": True, "timeToLive": 1440},
-                    "httpClient": {"blocked": False, "autoBlock": True},
-                }
-                code, resp = nx_post(f"/v1/repositories/{pf}/proxy", payload)
-                if code in [200, 201]:
-                    st.success(f"Proxy repository '{pn}' created!")
-                else:
-                    st.error(f"HTTP {code}: {resp[:300]}")
-
-    with tab4:
-        st.subheader("Users")
-        if st.button("📋 List Users"):
-            res = nx_get("/v1/security/users")
-            users = res if isinstance(res, list) else []
-            if users:
-                df = [{"User": u.get("userId",""), "Name": f"{u.get('firstName','')} {u.get('lastName','')}",
-                       "Email": u.get("emailAddress",""), "Status": u.get("status","")} for u in users]
-                st.dataframe(df, use_container_width=True)
+        if nexus_alive:
+            data = http_json(f"{NEXUS_URL}/service/rest/v1/status", auth=NEXUS_AUTH)
+            if data:
+                st.json(data)
             else:
-                st.info("No users found")
+                system_info = http_json(f"{NEXUS_URL}/service/rest/v1/status/check", auth=NEXUS_AUTH)
+                if system_info:
+                    st.json(system_info)
+                else:
+                    st.info("Could not fetch system info")
