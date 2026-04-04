@@ -1,0 +1,18 @@
+# Patch to expose ArgoCD server as NodePort on 30085
+# Apply after: kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  type: NodePort
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30085
+    - name: https
+      port: 443
+      targetPort: 8080
+      nodePort: 30086
