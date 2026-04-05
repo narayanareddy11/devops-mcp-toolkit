@@ -9,9 +9,44 @@
 [![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blueviolet)](https://modelcontextprotocol.io)
 [![Streamlit](https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-narayanareddy99910-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/u/narayanareddy99910)
-[![MCP Servers](https://img.shields.io/badge/MCP%20Servers-15-orange.svg)](#mcp-servers--185-tools)
-[![Tools](https://img.shields.io/badge/Total%20Tools-185%2B-red.svg)](#mcp-servers--185-tools)
+[![MCP Servers](https://img.shields.io/badge/MCP%20Servers-15-orange.svg)](#-mcp-tools--versions)
+[![Tools](https://img.shields.io/badge/Total%20Tools-213-red.svg)](#-mcp-tools--versions)
 [![Services](https://img.shields.io/badge/Services-13-9cf.svg)](#-services--versions)
+
+---
+
+## 🤖 MCP Tools & Versions
+
+> **Runtime:** Python `3.13.5` &nbsp;·&nbsp; MCP SDK `1.27.0` &nbsp;·&nbsp; Transport: `stdio`
+
+| # | MCP Name | Server File | Tools | Controls |
+|---|----------|-------------|------:|----------|
+| 1 | `docker-manager` | `servers/01_docker_manager.py` | **20** | Containers, images, volumes, networks, exec, stats, prune |
+| 2 | `terraform-manager` | `servers/02_terraform_manager.py` | **14** | Init, plan, apply, destroy, state, workspace, outputs |
+| 3 | `sonarqube-manager` | `servers/03_sonarqube_manager.py` | **14** | Projects, issues, quality gates, metrics, tokens, scanner |
+| 4 | `jenkins-manager` | `servers/04_jenkins_manager.py` | **16** | Jobs, builds, trigger, create, delete, nodes, plugins, queue |
+| 5 | `devops-dashboard` | `servers/05_devops_dashboard.py` | **8** | Full-stack health, Docker summary, Jenkins/Sonar/Terraform status |
+| 6 | `kubernetes-manager` | `servers/06_kubernetes_manager.py` | **24** | Pods, deployments, services, namespaces, events, logs, apply YAML |
+| 7 | `prometheus-grafana` | `servers/07_prometheus_grafana.py` | **15** | PromQL, range queries, targets, alerts, dashboards, datasources |
+| 8 | `argocd-manager` | `servers/08_argocd_manager.py` | **12** | Apps, sync, rollback, create, delete, repos, clusters |
+| 9 | `trivy-scanner` | `servers/09_trivy_scanner.py` | **10** | Image scan, IaC scan, K8s cluster scan, SBOM, DB update |
+| 10 | `helm-manager` | `servers/10_helm_manager.py` | **18** | Install, upgrade, rollback, uninstall, repos, lint, search, history |
+| 11 | `vault-manager` | `servers/11_vault_manager.py` | **16** | KV read/write/delete, policies, auth methods, tokens, engines |
+| 12 | `loki-manager` | `servers/12_loki_manager.py` | **10** | LogQL queries, pod logs, label browser, error detection |
+| 13 | `harbor-manager` | `servers/13_harbor_manager.py` | **8** | Projects, repositories, tags, artifacts, push/pull guide |
+| 14 | `minio-manager` | `servers/14_minio_manager.py` | **15** | Buckets, objects, upload, delete, presigned URLs, policies |
+| 15 | `nexus-manager` | `servers/15_nexus_manager.py` | **13** | Repos, components, search, upload, blob stores, tasks |
+| | **Total** | | **213** | |
+
+### Python Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `mcp[cli]` | `1.27.0` | Model Context Protocol SDK — FastMCP server framework |
+| `httpx` | `0.28.1` | Async HTTP client for REST API calls |
+| `streamlit` | `1.32.0` | Visual control panel dashboard |
+| `plotly` | `5.20.0` | Interactive charts (CPU/memory usage graphs) |
+| `playwright` | `1.58.0` | Browser automation for screenshots |
 
 ---
 
