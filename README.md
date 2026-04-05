@@ -2,7 +2,7 @@
 
 > **15 MCP servers** that let Claude AI control a complete local DevOps stack running on Kubernetes (Docker Desktop) — no cloud account required.
 
-[![Release](https://img.shields.io/badge/Release-v3.0.0-brightgreen.svg)](https://github.com/narayanareddy99910/mcp-server-01/releases)
+[![Release](https://img.shields.io/badge/Release-v4.0.0-brightgreen.svg)](https://github.com/narayanareddy99910/mcp-server-01/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://python.org)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-Docker%20Desktop-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
@@ -529,6 +529,17 @@ mcp-server-01/
 ---
 
 ## Release Notes
+
+### v4.0.0 — 2026-04-05
+- **213 MCP tools** across 15 servers — exact tool counts verified from source
+- **MCP Tools & Versions** section added to README with full server table and Python dependency versions
+- **Services & Versions** section listing all 13 services with exact running versions
+- **Bug fixes:** `HARBOR_URL`, `HARBOR_AUTH`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` NameError crashes resolved
+- **Registry UI CORS fix:** `Access-Control-Allow-Origin: *` + correct `REGISTRY_URL=http://127.0.0.1:30880`
+- **Fresh screenshots:** 25 Streamlit pages + 10 tool UIs + MinIO/Vault/SonarQube after-login shots
+- **Vault login page** screenshot added alongside after-login view
+- **SonarQube** after-login projects dashboard screenshot
+- **MinIO** Object Browser screenshot after login (bucket + object visible)
 
 ### v3.0.0 — 2026-04-05
 - **Streamlit dashboard** fully revamped — all 15 tool pages enhanced with rich tabs, forms, and actions
