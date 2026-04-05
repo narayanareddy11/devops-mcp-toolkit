@@ -25,6 +25,14 @@ spec:
               value: "0.0.0.0:5000"
             - name: REGISTRY_STORAGE_DELETE_ENABLED
               value: "true"
+            - name: REGISTRY_HTTP_HEADERS_Access-Control-Allow-Origin
+              value: '["*"]'
+            - name: REGISTRY_HTTP_HEADERS_Access-Control-Allow-Methods
+              value: '["GET","HEAD","OPTIONS","DELETE"]'
+            - name: REGISTRY_HTTP_HEADERS_Access-Control-Allow-Headers
+              value: '["Authorization","Content-Type","Accept"]'
+            - name: REGISTRY_HTTP_HEADERS_Access-Control-Expose-Headers
+              value: '["Docker-Content-Digest"]'
           volumeMounts:
             - name: registry-data
               mountPath: /var/lib/registry
@@ -47,7 +55,7 @@ spec:
             - containerPort: 80
           env:
             - name: REGISTRY_URL
-              value: "http://localhost:5000"
+              value: "http://127.0.0.1:30880"
             - name: REGISTRY_TITLE
               value: "DevOps Container Registry"
             - name: DELETE_IMAGES
