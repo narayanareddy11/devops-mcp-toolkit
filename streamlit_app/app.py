@@ -58,26 +58,11 @@ header {visibility: hidden;}
 }
 [data-testid="stSidebar"] * { color: #e0e0e0 !important; }
 
-/* Nav buttons — look like plain list items */
-[data-testid="stSidebar"] [data-testid="stButton"] > button {
-    width: 100% !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    background: transparent !important;
-    border: 1px solid transparent !important;
+/* Radio nav labels */
+[data-testid="stSidebar"] .stRadio label {
     color: #b0c4de !important;
-    padding: 4px 10px !important;
-    border-radius: 6px !important;
-    font-size: 0.83rem !important;
-    line-height: 1.5 !important;
-    min-height: 0 !important;
-    box-shadow: none !important;
-    margin: 1px 0 !important;
-}
-[data-testid="stSidebar"] [data-testid="stButton"] > button:hover {
-    background: rgba(79,195,247,0.12) !important;
-    border-color: rgba(79,195,247,0.25) !important;
-    color: #e0f7fa !important;
+    font-size: 0.88rem !important;
+    padding: 2px 0 !important;
 }
 
 /* Page header card */
@@ -142,6 +127,93 @@ header {visibility: hidden;}
 /* Status dot */
 .dot-up   { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; margin-right: 6px; }
 .dot-down { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #f44336; margin-right: 6px; }
+
+/* Pulse animation for live services */
+@keyframes pulse-green {
+  0%   { box-shadow: 0 0 0 0 rgba(76,175,80,0.6); }
+  70%  { box-shadow: 0 0 0 7px rgba(76,175,80,0); }
+  100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); }
+}
+@keyframes pulse-red {
+  0%   { box-shadow: 0 0 0 0 rgba(244,67,54,0.6); }
+  70%  { box-shadow: 0 0 0 7px rgba(244,67,54,0); }
+  100% { box-shadow: 0 0 0 0 rgba(244,67,54,0); }
+}
+.pulse-up   { animation: pulse-green 2s infinite; }
+.pulse-down { animation: pulse-red  2s infinite; }
+
+/* KPI summary cards */
+.kpi-card {
+  background: linear-gradient(135deg, #1a2535 0%, #243447 100%);
+  border: 1px solid #2d4a6a;
+  border-radius: 14px;
+  padding: 1.1rem 1.4rem;
+  text-align: center;
+  height: 100%;
+}
+.kpi-number { font-size: 2.6rem; font-weight: 900; line-height: 1; margin-bottom: 0.2rem; }
+.kpi-label  { font-size: 0.72rem; color: #78909c; text-transform: uppercase; letter-spacing: 0.08em; }
+.kpi-sub    { font-size: 0.82rem; margin-top: 0.35rem; font-weight: 600; }
+
+/* Rich service tiles */
+.svc-tile {
+  background: #151f2e;
+  border: 1px solid #243040;
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+.svc-tile::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.svc-tile-up::before   { background: linear-gradient(90deg, #4caf50, #81c784); }
+.svc-tile-down::before { background: linear-gradient(90deg, #f44336, #e57373); }
+.svc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+.svc-icon-name { display: flex; align-items: center; gap: 8px; }
+.svc-icon   { font-size: 1.4rem; }
+.svc-name   { font-size: 0.82rem; font-weight: 700; color: #90caf9; text-transform: uppercase; letter-spacing: 0.05em; }
+.svc-status-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.svc-metric { font-size: 1.6rem; font-weight: 900; color: #ffffff; margin: 0.2rem 0 0.1rem 0; line-height: 1; }
+.svc-detail { font-size: 0.72rem; color: #546e7a; }
+.svc-link   { font-size: 0.7rem; color: #4fc3f7; text-decoration: none; font-weight: 600; }
+
+/* Quick action tiles */
+.qa-tile {
+  background: linear-gradient(135deg, #1e2d40 0%, #162030 100%);
+  border: 1px solid #2a3d55;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.qa-tile:hover { border-color: #4fc3f7; }
+.qa-icon  { font-size: 1.6rem; margin-bottom: 0.3rem; }
+.qa-label { font-size: 0.78rem; color: #b0bec5; font-weight: 600; }
+
+/* Activity feed row */
+.feed-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; border-radius: 8px;
+  margin: 3px 0;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.feed-icon  { font-size: 1rem; flex-shrink: 0; }
+.feed-title { font-size: 0.82rem; color: #cfd8dc; flex: 1; }
+.feed-badge { font-size: 0.68rem; font-weight: bold; padding: 2px 8px; border-radius: 20px; }
+.fb-success { background:#1b5e20; color:#a5d6a7; }
+.fb-failure { background:#b71c1c; color:#ffcdd2; }
+.fb-running { background:#e65100; color:#ffe0b2; }
+.fb-info    { background:#0d47a1; color:#bbdefb; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -227,52 +299,87 @@ with st.sidebar:
     if "active_page" not in st.session_state:
         st.session_state["active_page"] = "🏠 Dashboard"
 
-    # ── Single flat nav: all tools with live status ──────────────────────────────
-    # (page_name, port, url, host)
-    _NAV_ITEMS = [
-        ("🏠 Dashboard",             0,     "",                        ""),
-        ("⚙️ Jenkins",              30080, "http://localhost:30080",  "localhost"),
-        ("🔍 SonarQube",            30900, "http://localhost:30900",  "localhost"),
-        ("🔀 ArgoCD",               30085, "https://localhost:30085", "localhost"),
-        ("🛡️ Trivy Scanner",        0,     "",                        ""),
-        ("🔐 Vault Secrets",        30200, "http://localhost:30200",  "localhost"),
-        ("📊 Prometheus & Grafana", 30090, "http://localhost:30090",  "localhost"),
-        ("📜 Loki Logs",            30310, "http://localhost:30310",  "localhost"),
-        ("📦 Container Registry",   30880, "http://localhost:30881",  "127.0.0.1"),
-        ("🗄️ MinIO Storage",        30921, "http://localhost:30921",  "localhost"),
-        ("🏛️ Nexus Repository",     30081, "http://localhost:30081",  "localhost"),
-        ("☸️ Kubernetes",           0,     "",                        ""),
-        ("🐳 Docker",               0,     "",                        ""),
-        ("🌍 Terraform",            0,     "",                        ""),
-        ("⛵ Helm Manager",         0,     "",                        ""),
-    ]
+    # ── Live status dots for sidebar labels ──────────────────────────────────
+    def _dot(port, host="localhost"):
+        if port == 0:
+            return "🔵"
+        return "🟢" if port_up(port, host=host) else "🔴"
 
-    st.markdown('<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.2rem 0 0.4rem 0;">MCP Tools & Services</p>', unsafe_allow_html=True)
+    _dj  = _dot(30080); _ds  = _dot(30900); _da  = _dot(30085)
+    _dg  = _dot(30030); _dp  = _dot(30090); _dv  = _dot(30200)
+    _dl  = _dot(30310); _dreg= _dot(30880, host="127.0.0.1")
+    _dm  = _dot(30921); _dn  = _dot(30081); _dh  = _dot(30880, host="127.0.0.1")
 
-    for _page, _port, _url, _host in _NAV_ITEMS:
-        if _port > 0:
-            _up = port_up(_port, host=_host or "localhost")
-            _dot = "🟢" if _up else "🔴"
-        else:
-            _dot = "🔵"
+    def _nav(key):
+        st.session_state["active_page"] = st.session_state[key]
 
-        _label = f"{_dot}  {_page}"
-        if st.button(_label, key=f"nav_{_page}", use_container_width=True):
-            st.session_state["active_page"] = _page
-            st.rerun()
+    def _grp_header(label):
+        st.markdown(
+            f'<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;'
+            f'letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">{label}</p>',
+            unsafe_allow_html=True,
+        )
 
-        # Show URL as a tiny link below web-service buttons
-        if _url:
-            _short = _url.replace("http://","").replace("https://","")
-            st.markdown(
-                f'<div style="margin:-6px 0 2px 28px;">'
-                f'<a href="{_url}" target="_blank" '
-                f'style="color:#546e7a;font-size:0.62rem;text-decoration:none;">{_short}</a>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+    # ── OVERVIEW ─────────────────────────────────────────────────────────────
+    _grp_header("Overview")
+    st.radio("Overview", ["🏠 Dashboard"], key="nav_overview",
+             label_visibility="collapsed", on_change=_nav, args=("nav_overview",))
 
-    active_page = st.session_state["active_page"]
+    # ── INFRASTRUCTURE ────────────────────────────────────────────────────────
+    _grp_header("Infrastructure")
+    st.radio("Infrastructure",
+             ["🐳 Docker", "☸️ Kubernetes", "🌍 Terraform"],
+             key="nav_infra", label_visibility="collapsed",
+             on_change=_nav, args=("nav_infra",))
+
+    # ── CI / CD ───────────────────────────────────────────────────────────────
+    _grp_header("CI / CD")
+    st.radio("CI/CD",
+             [f"{_dj} ⚙️ Jenkins", f"{_ds} 🔍 SonarQube", f"{_da} 🔀 ArgoCD"],
+             key="nav_cicd", label_visibility="collapsed",
+             on_change=_nav, args=("nav_cicd",))
+
+    # ── SECURITY ──────────────────────────────────────────────────────────────
+    _grp_header("Security")
+    st.radio("Security",
+             [f"🔵 🛡️ Trivy Scanner", f"{_dv} 🔐 Vault Secrets"],
+             key="nav_sec", label_visibility="collapsed",
+             on_change=_nav, args=("nav_sec",))
+
+    # ── OBSERVABILITY ─────────────────────────────────────────────────────────
+    _grp_header("Observability")
+    st.radio("Observability",
+             [f"{_dp} 📊 Prometheus & Grafana", f"{_dl} 📜 Loki Logs"],
+             key="nav_obs", label_visibility="collapsed",
+             on_change=_nav, args=("nav_obs",))
+
+    # ── DEPLOYMENT ────────────────────────────────────────────────────────────
+    _grp_header("Deployment")
+    st.radio("Deployment",
+             ["🔵 ⛵ Helm Manager"],
+             key="nav_dep", label_visibility="collapsed",
+             on_change=_nav, args=("nav_dep",))
+
+    # ── STORAGE & REGISTRY ────────────────────────────────────────────────────
+    _grp_header("Storage & Registry")
+    st.radio("Storage",
+             [f"{_dreg} 📦 Container Registry",
+              f"{_dm} 🗄️ MinIO Storage",
+              f"{_dn} 🏛️ Nexus Repository"],
+             key="nav_stor", label_visibility="collapsed",
+             on_change=_nav, args=("nav_stor",))
+
+    # ── Resolve active page (strip leading dot prefix from radio labels) ──────
+    def _strip_dot(label):
+        """Remove leading status dot emoji added to radio labels."""
+        for dot in ("🟢 ", "🔴 ", "🔵 "):
+            if label.startswith(dot):
+                return label[len(dot):]
+        return label
+
+    _raw = st.session_state.get("active_page", "🏠 Dashboard")
+    active_page = _strip_dot(_raw)
+    st.session_state["active_page"] = active_page   # normalise
 
     st.divider()
     auto_refresh = st.toggle("⟳ Auto-refresh (30s)", value=False)
@@ -282,16 +389,10 @@ if auto_refresh:
     st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE 1 — DASHBOARD
+# PAGE 1 — DASHBOARD (Enhanced)
 # ══════════════════════════════════════════════════════════════════════════════
 if active_page == "🏠 Dashboard":
-    page_header("🏠", "DevOps Stack Dashboard", "Live health status of all 15 services running on Kubernetes")
-
-    col_refresh, col_clear, _ = st.columns([1, 1, 5])
-    with col_refresh:
-        if st.button("🔄 Refresh", type="primary"):
-            st.cache_data.clear()
-            st.rerun()
+    import pandas as pd
 
     # ── Cached data loaders ──────────────────────────────────────────────────
     @st.cache_data(ttl=30)
@@ -310,7 +411,7 @@ if active_page == "🏠 Dashboard":
 
     @st.cache_data(ttl=30)
     def dash_k8s_pods(ns="devops"):
-        r = kube(f"get pods --no-headers", ns=ns)
+        r = kube("get pods --no-headers", ns=ns)
         if r["ok"] and r["out"]:
             return True, len([l for l in r["out"].splitlines() if l.strip()])
         return False, 0
@@ -359,9 +460,14 @@ if active_page == "🏠 Dashboard":
 
     @st.cache_data(ttl=30)
     def dash_loki():
-        data = http_json(f"{LOKI_URL}/ready")
         up = port_up(30310)
         return up, "Ready" if up else "Unreachable"
+
+    @st.cache_data(ttl=30)
+    def dash_minio():
+        up = port_up(30920)
+        data = http_json(f"{MINIO_URL}/minio/health/live") if up else None
+        return up, "UP" if up else "DOWN"
 
     @st.cache_data(ttl=30)
     def dash_nexus():
@@ -370,193 +476,341 @@ if active_page == "🏠 Dashboard":
         count = len(data) if data else 0
         return up, count
 
-    # ── Row 1: Core services (5 cols) ─────────────────────────────────────────
-    st.markdown("#### Core Services")
-    c1, c2, c3, c4, c5 = st.columns(5)
+    @st.cache_data(ttl=30)
+    def dash_harbor():
+        up = port_up(30880, host="127.0.0.1")
+        data = http_json(f"http://127.0.0.1:30880/api/v2.0/systeminfo",
+                         auth=("admin", "Admin@123456789@")) if up else None
+        return up, data.get("harbor_version", "UP") if data else ("UP" if up else "DOWN")
 
-    jen_up, jen_jobs = dash_jenkins()
-    c1.markdown(service_card("Jenkins", f"{jen_jobs} Jobs", "CI/CD Server · :30080", jen_up), unsafe_allow_html=True)
+    @st.cache_data(ttl=30)
+    def get_pods_table():
+        r = kube("get pods -o wide --no-headers", ns="devops")
+        rows = []
+        if r["ok"] and r["out"]:
+            for line in r["out"].splitlines():
+                parts = line.split()
+                if len(parts) >= 4:
+                    rows.append({
+                        "Name":     parts[0],
+                        "Ready":    parts[1],
+                        "Status":   parts[2],
+                        "Restarts": parts[3],
+                        "Age":      parts[4] if len(parts) > 4 else "",
+                    })
+        return rows
 
-    son_up, son_proj = dash_sonar()
-    c2.markdown(service_card("SonarQube", f"{son_proj} Projects", "Code Quality · :30900", son_up), unsafe_allow_html=True)
+    @st.cache_data(ttl=30)
+    def get_jenkins_builds():
+        jobs_data = http_json(
+            f"{JENKINS_URL}/api/json?tree=jobs[name,lastBuild[number,result,timestamp,duration]]",
+            auth=JENKINS_AUTH)
+        builds = []
+        if jobs_data:
+            for job in (jobs_data.get("jobs") or [])[:10]:
+                lb = job.get("lastBuild") or {}
+                if lb:
+                    builds.append({
+                        "Job":      job.get("name", ""),
+                        "Build #":  lb.get("number", ""),
+                        "Result":   lb.get("result") or "BUILDING",
+                        "Duration": f"{int(lb.get('duration', 0)/1000)}s",
+                    })
+        return builds
 
-    k8s_up, k8s_pods = dash_k8s_pods()
-    c3.markdown(service_card("Kubernetes", f"{k8s_pods} Pods", "devops namespace", k8s_up), unsafe_allow_html=True)
+    @st.cache_data(ttl=60)
+    def get_prom_metrics():
+        cpu = http_json(f"{PROM_URL}/api/v1/query",
+            params={"query": 'sum(rate(container_cpu_usage_seconds_total{namespace="devops",container!=""}[5m])) by (pod)'})
+        mem = http_json(f"{PROM_URL}/api/v1/query",
+            params={"query": 'sum(container_memory_working_set_bytes{namespace="devops",container!=""}) by (pod)'})
+        return cpu, mem
 
-    graf_up, graf_ds = dash_grafana()
-    c4.markdown(service_card("Grafana", f"{graf_ds} Datasources", "Visualization · :30030", graf_up), unsafe_allow_html=True)
-
-    argo_up, argo_apps = dash_argocd()
-    c5.markdown(service_card("ArgoCD", f"{argo_apps} Apps", "GitOps · :30085", argo_up), unsafe_allow_html=True)
-
-    st.markdown("")
-
-    # ── Row 2: Observability + extras (5 cols) ─────────────────────────────────
-    st.markdown("#### Observability & Storage")
-    c6, c7, c8, c9, c10 = st.columns(5)
-
-    prom_up, prom_tgts = dash_prometheus()
-    c6.markdown(service_card("Prometheus", f"{prom_tgts} Targets", "Metrics · :30090", prom_up), unsafe_allow_html=True)
-
-    vault_up, vault_state = dash_vault()
-    c7.markdown(service_card("Vault", vault_state, "Secrets · :30200", vault_up), unsafe_allow_html=True)
-
+    # ── Fetch all data ────────────────────────────────────────────────────────
+    jen_up,  jen_jobs   = dash_jenkins()
+    son_up,  son_proj   = dash_sonar()
+    k8s_up,  k8s_pods   = dash_k8s_pods()
+    graf_up, graf_ds    = dash_grafana()
+    argo_up, argo_apps  = dash_argocd()
+    prom_up, prom_tgts  = dash_prometheus()
+    vault_up,vault_state= dash_vault()
     loki_up, loki_state = dash_loki()
-    c8.markdown(service_card("Loki", loki_state, "Logs · :30310", loki_up), unsafe_allow_html=True)
+    minio_up,minio_state= dash_minio()
+    nex_up,  nex_repos  = dash_nexus()
+    hrb_up,  hrb_ver    = dash_harbor()
 
-    minio_up = port_up(30920)
-    c9.markdown(service_card("MinIO", "UP" if minio_up else "DOWN", "Object Storage · :30920", minio_up), unsafe_allow_html=True)
+    all_ups = [jen_up, son_up, k8s_up, graf_up, argo_up,
+               prom_up, vault_up, loki_up, minio_up, nex_up, hrb_up]
+    services_up   = sum(all_ups)
+    services_total = len(all_ups)
+    health_pct    = int(services_up / services_total * 100)
 
-    nex_up, nex_repos = dash_nexus()
-    c10.markdown(service_card("Nexus", f"{nex_repos} Repos" if nex_repos else "UP" if nex_up else "DOWN", "Artifacts · :30081", nex_up), unsafe_allow_html=True)
+    # ── Header row ───────────────────────────────────────────────────────────
+    hd_left, hd_right = st.columns([5, 1])
+    with hd_left:
+        st.markdown("""
+        <div style="padding:0.8rem 0 0.5rem 0;">
+          <h1 style="color:#fff;margin:0;font-size:1.9rem;font-weight:900;">
+            🏠 DevOps Stack Dashboard
+          </h1>
+          <p style="color:#78909c;margin:0.3rem 0 0 0;font-size:0.88rem;">
+            Real-time health monitor · Kubernetes cluster · 15 MCP servers
+          </p>
+        </div>""", unsafe_allow_html=True)
+    with hd_right:
+        st.markdown("<div style='height:0.9rem'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Refresh", type="primary", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
 
-    st.markdown("")
+    # ── KPI summary strip ─────────────────────────────────────────────────────
+    k1, k2, k3, k4, k5 = st.columns(5)
+    health_color = "#4caf50" if health_pct >= 80 else "#ff9800" if health_pct >= 50 else "#f44336"
+    k1.markdown(f"""<div class="kpi-card">
+      <div class="kpi-number" style="color:{health_color};">{health_pct}%</div>
+      <div class="kpi-label">Cluster Health</div>
+      <div class="kpi-sub" style="color:{health_color};">{services_up}/{services_total} services UP</div>
+    </div>""", unsafe_allow_html=True)
 
-    # ── Row 3: Quick actions ──────────────────────────────────────────────────
-    st.markdown("#### Quick Actions")
-    qa1, qa2, qa3, qa4, qa5 = st.columns(5)
+    k2.markdown(f"""<div class="kpi-card">
+      <div class="kpi-number" style="color:#64b5f6;">{k8s_pods}</div>
+      <div class="kpi-label">Pods Running</div>
+      <div class="kpi-sub" style="color:{'#4caf50' if k8s_up else '#f44336'};">devops namespace</div>
+    </div>""", unsafe_allow_html=True)
+
+    k3.markdown(f"""<div class="kpi-card">
+      <div class="kpi-number" style="color:#ffb74d;">{jen_jobs}</div>
+      <div class="kpi-label">Jenkins Jobs</div>
+      <div class="kpi-sub" style="color:{'#4caf50' if jen_up else '#f44336'};">{'Online' if jen_up else 'Offline'} · :30080</div>
+    </div>""", unsafe_allow_html=True)
+
+    k4.markdown(f"""<div class="kpi-card">
+      <div class="kpi-number" style="color:#ce93d8;">{prom_tgts}</div>
+      <div class="kpi-label">Prom Targets</div>
+      <div class="kpi-sub" style="color:{'#4caf50' if prom_up else '#f44336'};">{'Scraping' if prom_up else 'Offline'} · :30090</div>
+    </div>""", unsafe_allow_html=True)
+
+    k5.markdown(f"""<div class="kpi-card">
+      <div class="kpi-number" style="color:#80cbc4;">{'🔓' if vault_state=='Unsealed' else '🔒'}</div>
+      <div class="kpi-label">Vault</div>
+      <div class="kpi-sub" style="color:{'#4caf50' if vault_state=='Unsealed' else '#ff9800'};">{vault_state} · :30200</div>
+    </div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+
+    # ── Service tiles — helper ────────────────────────────────────────────────
+    def svc_tile(icon, name, metric, detail, url, up):
+        dot_color = "#4caf50" if up else "#f44336"
+        cls = "svc-tile-up" if up else "svc-tile-down"
+        link_html = f'<a href="{url}" target="_blank" class="svc-link">↗ Open</a>' if url else ""
+        return f"""
+        <div class="svc-tile {cls}">
+          <div class="svc-header">
+            <div class="svc-icon-name">
+              <span class="svc-icon">{icon}</span>
+              <span class="svc-name">{name}</span>
+            </div>
+            <div class="svc-status-dot pulse-{'up' if up else 'down'}"
+                 style="background:{dot_color};width:10px;height:10px;border-radius:50%;"></div>
+          </div>
+          <div class="svc-metric">{metric}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+            <span class="svc-detail">{detail}</span>
+            {link_html}
+          </div>
+        </div>"""
+
+    # ── Row 1: CI/CD + Infra ──────────────────────────────────────────────────
+    st.markdown('<p style="font-size:0.72rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.4rem 0 0.5rem 0;">● CI/CD & Infrastructure</p>', unsafe_allow_html=True)
+    r1c1, r1c2, r1c3, r1c4, r1c5, r1c6 = st.columns(6)
+    r1c1.markdown(svc_tile("⚙️","Jenkins",   f"{jen_jobs} Jobs",     ":30080", JENKINS_URL,    jen_up),  unsafe_allow_html=True)
+    r1c2.markdown(svc_tile("🔍","SonarQube", f"{son_proj} Projects", ":30900", SONAR_URL,      son_up),  unsafe_allow_html=True)
+    r1c3.markdown(svc_tile("🔀","ArgoCD",    f"{argo_apps} Apps",    ":30085", ARGOCD_URL,     argo_up), unsafe_allow_html=True)
+    r1c4.markdown(svc_tile("☸️","Kubernetes", f"{k8s_pods} Pods",   "devops ns", "",           k8s_up),  unsafe_allow_html=True)
+    r1c5.markdown(svc_tile("📈","Grafana",   f"{graf_ds} Sources",   ":30030", GRAFANA_URL,    graf_up), unsafe_allow_html=True)
+    r1c6.markdown(svc_tile("📊","Prometheus",f"{prom_tgts} Targets", ":30090", PROM_URL,       prom_up), unsafe_allow_html=True)
+
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+    # ── Row 2: Storage + Security ──────────────────────────────────────────────
+    st.markdown('<p style="font-size:0.72rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0.4rem 0 0.5rem 0;">● Storage, Security & Observability</p>', unsafe_allow_html=True)
+    r2c1, r2c2, r2c3, r2c4, r2c5 = st.columns(5)
+    r2c1.markdown(svc_tile("🔐","Vault",     vault_state,            ":30200", VAULT_URL,      vault_up), unsafe_allow_html=True)
+    r2c2.markdown(svc_tile("📜","Loki",      loki_state,             ":30310", LOKI_URL,       loki_up),  unsafe_allow_html=True)
+    r2c3.markdown(svc_tile("🗄️","MinIO",    minio_state,             ":30921", MINIO_CONSOLE_URL, minio_up), unsafe_allow_html=True)
+    r2c4.markdown(svc_tile("🏛️","Nexus",    f"{nex_repos} Repos",   ":30081", NEXUS_URL,      nex_up),   unsafe_allow_html=True)
+    r2c5.markdown(svc_tile("📦","Harbor",   str(hrb_ver),            ":30880", "http://127.0.0.1:30881", hrb_up), unsafe_allow_html=True)
+
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+
+    # ── Quick Actions ─────────────────────────────────────────────────────────
+    st.markdown('<p style="font-size:0.72rem;color:#546e7a;text-transform:uppercase;letter-spacing:0.1em;margin:0 0 0.5rem 0;">● Quick Actions</p>', unsafe_allow_html=True)
+    qa1, qa2, qa3, qa4, qa5, qa6 = st.columns(6)
 
     with qa1:
-        if st.button("🔄 Restart All Pods", use_container_width=True):
+        if st.button("🔄  Restart All Pods", use_container_width=True):
             with st.spinner("Restarting deployments..."):
                 dep_r = kube("get deployments -o jsonpath='{.items[*].metadata.name}'", ns="devops")
                 if dep_r["ok"] and dep_r["out"]:
                     deps = dep_r["out"].strip("'").split()
                     for d in deps:
                         kube(f"rollout restart deployment/{d}", ns="devops")
-                    st.success(f"Restarted {len(deps)} deployment(s)")
+                    st.success(f"✅ Restarted {len(deps)} deployment(s)")
                 else:
                     st.warning("No deployments found in devops namespace")
-
     with qa2:
-        st.link_button("📊 Open Grafana", GRAFANA_URL, use_container_width=True)
-
-    with qa3:
-        if st.button("🔀 Sync ArgoCD Apps", use_container_width=True):
-            st.info(f"ArgoCD has {argo_apps} app(s). Use ArgoCD page for sync.")
-
-    with qa4:
-        if st.button("🧹 Docker Prune", use_container_width=True):
-            with st.spinner("Pruning Docker system..."):
+        if st.button("🧹  Docker Prune", use_container_width=True):
+            with st.spinner("Pruning Docker..."):
                 r = docker("system prune -f")
-            show(r, "Docker system pruned successfully")
-
+            show(r, "✅ Docker system pruned")
+    with qa3:
+        st.link_button("📈  Open Grafana",    GRAFANA_URL,  use_container_width=True)
+    with qa4:
+        st.link_button("⚙️  Open Jenkins",    JENKINS_URL,  use_container_width=True)
     with qa5:
-        st.link_button("🔧 Open Jenkins", JENKINS_URL, use_container_width=True)
+        st.link_button("🔍  Open SonarQube",  SONAR_URL,    use_container_width=True)
+    with qa6:
+        st.link_button("🔐  Open Vault",      VAULT_URL,    use_container_width=True)
 
     st.divider()
 
-    # ── Row 4: K8s pods table + Jenkins builds ─────────────────────────────────
-    left_col, right_col = st.columns(2)
+    # ── Activity section: K8s pods + Jenkins builds ───────────────────────────
+    left_col, right_col = st.columns([3, 2])
 
     with left_col:
         st.markdown("##### ☸️ K8s Pods — devops namespace")
-
-        @st.cache_data(ttl=30)
-        def get_pods_table():
-            r = kube("get pods -o wide --no-headers", ns="devops")
-            rows = []
-            if r["ok"] and r["out"]:
-                for line in r["out"].splitlines():
-                    parts = line.split()
-                    if len(parts) >= 4:
-                        rows.append({
-                            "Name":    parts[0],
-                            "Status":  parts[2],
-                            "Ready":   parts[1],
-                            "Restarts": parts[3],
-                            "Age":     parts[4] if len(parts) > 4 else "",
-                            "Node":    parts[6] if len(parts) > 6 else "",
-                        })
-            return rows
-
         pods_rows = get_pods_table()
         if pods_rows:
-            import pandas as pd
             df_pods = pd.DataFrame(pods_rows)
-            st.dataframe(df_pods, use_container_width=True, hide_index=True)
+
+            def _pod_color(row):
+                s = row.get("Status", "")
+                if s == "Running":   return ["background-color:#0a2a0a"] * len(row)
+                if s == "Pending":   return ["background-color:#2a2000"] * len(row)
+                if "Error" in s or "CrashLoop" in s:
+                    return ["background-color:#2a0a0a"] * len(row)
+                return [""] * len(row)
+
+            st.dataframe(
+                df_pods.style.apply(_pod_color, axis=1),
+                use_container_width=True, hide_index=True,
+            )
+
+            # Status summary badges
+            statuses = [r["Status"] for r in pods_rows]
+            running  = statuses.count("Running")
+            pending  = sum(1 for s in statuses if "Pending" in s)
+            errored  = sum(1 for s in statuses if "Error" in s or "Crash" in s)
+            _badge_html = f'<span class="badge-up">{running} Running</span> '
+            if pending: _badge_html += f'<span class="badge-warn">{pending} Pending</span> '
+            if errored: _badge_html += f'<span class="badge-down">{errored} Error</span>'
+            st.markdown(_badge_html, unsafe_allow_html=True)
         else:
-            st.info("No pods found in devops namespace — check if cluster is running")
+            st.info("No pods found in devops namespace")
 
     with right_col:
         st.markdown("##### ⚙️ Recent Jenkins Builds")
-
-        @st.cache_data(ttl=30)
-        def get_jenkins_builds():
-            jobs_data = http_json(f"{JENKINS_URL}/api/json?tree=jobs[name,lastBuild[number,result,timestamp,duration]]", auth=JENKINS_AUTH)
-            builds = []
-            if jobs_data:
-                for job in (jobs_data.get("jobs") or [])[:10]:
-                    lb = job.get("lastBuild") or {}
-                    if lb:
-                        builds.append({
-                            "Job":      job.get("name", ""),
-                            "Build #":  lb.get("number", ""),
-                            "Result":   lb.get("result") or "BUILDING",
-                            "Duration": f"{int(lb.get('duration', 0)/1000)}s",
-                        })
-            return builds
-
         jbuilds = get_jenkins_builds()
         if jbuilds:
-            import pandas as pd
-            df_builds = pd.DataFrame(jbuilds[:8])
-            st.dataframe(df_builds, use_container_width=True, hide_index=True)
+            feed_html = ""
+            for b in jbuilds[:8]:
+                result = b["Result"]
+                if result == "SUCCESS":
+                    icon, badge_cls = "✅", "fb-success"
+                elif result == "FAILURE":
+                    icon, badge_cls = "❌", "fb-failure"
+                elif result == "BUILDING":
+                    icon, badge_cls = "🔄", "fb-running"
+                else:
+                    icon, badge_cls = "⚪", "fb-info"
+                feed_html += f"""
+                <div class="feed-row">
+                  <span class="feed-icon">{icon}</span>
+                  <span class="feed-title">{b['Job']} <span style="color:#546e7a;font-size:0.72rem;">#{b['Build #']}</span></span>
+                  <span class="feed-badge {badge_cls}">{result}</span>
+                  <span style="font-size:0.7rem;color:#546e7a;">{b['Duration']}</span>
+                </div>"""
+            st.markdown(feed_html, unsafe_allow_html=True)
         else:
             st.info("Jenkins unreachable or no builds found")
 
     st.divider()
 
-    # ── Row 5: Prometheus metrics chart ───────────────────────────────────────
-    st.markdown("##### 📈 Pod Resource Usage (Prometheus)")
-
-    @st.cache_data(ttl=60)
-    def get_prom_metrics():
-        cpu_data = http_json(f"{PROM_URL}/api/v1/query",
-                             params={"query": 'sum(rate(container_cpu_usage_seconds_total{namespace="devops",container!=""}[5m])) by (pod)'})
-        mem_data = http_json(f"{PROM_URL}/api/v1/query",
-                             params={"query": 'sum(container_memory_working_set_bytes{namespace="devops",container!=""}) by (pod)'})
-        return cpu_data, mem_data
+    # ── Prometheus resource charts (Plotly) ───────────────────────────────────
+    st.markdown("##### 📈 Pod Resource Usage (live from Prometheus)")
 
     if prom_up:
         try:
             cpu_data, mem_data = get_prom_metrics()
-            import pandas as pd
+            import plotly.graph_objects as go
 
-            mc1, mc2 = st.columns(2)
-            with mc1:
+            pc1, pc2 = st.columns(2)
+
+            with pc1:
                 if cpu_data and cpu_data.get("status") == "success":
                     results = cpu_data["data"]["result"]
                     if results:
-                        cpu_df = pd.DataFrame({
-                            r["metric"].get("pod", "unknown"): [float(r["value"][1])]
-                            for r in results
-                        })
-                        st.markdown("**CPU Usage (cores)**")
-                        st.bar_chart(cpu_df.T, use_container_width=True)
+                        pods   = [r["metric"].get("pod","?").split("-")[0] for r in results]
+                        values = [round(float(r["value"][1])*1000, 2) for r in results]
+                        fig = go.Figure(go.Bar(
+                            x=values, y=pods, orientation="h",
+                            marker=dict(
+                                color=values,
+                                colorscale=[[0,"#1b5e20"],[0.5,"#f9a825"],[1,"#b71c1c"]],
+                                showscale=False,
+                            ),
+                            text=[f"{v} m" for v in values],
+                            textposition="outside",
+                        ))
+                        fig.update_layout(
+                            title=dict(text="CPU Usage (millicores)", font=dict(color="#90caf9",size=13)),
+                            paper_bgcolor="#151f2e", plot_bgcolor="#151f2e",
+                            font=dict(color="#cfd8dc", size=11),
+                            xaxis=dict(showgrid=True, gridcolor="#243040", color="#78909c"),
+                            yaxis=dict(showgrid=False, color="#cfd8dc"),
+                            margin=dict(l=10,r=40,t=40,b=10),
+                            height=280,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
                     else:
-                        st.info("No CPU data from Prometheus yet")
+                        st.info("No CPU data yet — Prometheus may still be scraping")
                 else:
                     st.info("Waiting for Prometheus CPU data")
 
-            with mc2:
+            with pc2:
                 if mem_data and mem_data.get("status") == "success":
                     results = mem_data["data"]["result"]
                     if results:
-                        mem_df = pd.DataFrame({
-                            r["metric"].get("pod", "unknown"): [float(r["value"][1]) / (1024**2)]
-                            for r in results
-                        })
-                        st.markdown("**Memory Usage (MB)**")
-                        st.bar_chart(mem_df.T, use_container_width=True)
+                        pods   = [r["metric"].get("pod","?").split("-")[0] for r in results]
+                        values = [round(float(r["value"][1])/(1024**2), 1) for r in results]
+                        fig = go.Figure(go.Bar(
+                            x=values, y=pods, orientation="h",
+                            marker=dict(
+                                color=values,
+                                colorscale=[[0,"#0d47a1"],[0.5,"#6a1b9a"],[1,"#880e4f"]],
+                                showscale=False,
+                            ),
+                            text=[f"{v} MB" for v in values],
+                            textposition="outside",
+                        ))
+                        fig.update_layout(
+                            title=dict(text="Memory Usage (MB)", font=dict(color="#90caf9",size=13)),
+                            paper_bgcolor="#151f2e", plot_bgcolor="#151f2e",
+                            font=dict(color="#cfd8dc", size=11),
+                            xaxis=dict(showgrid=True, gridcolor="#243040", color="#78909c"),
+                            yaxis=dict(showgrid=False, color="#cfd8dc"),
+                            margin=dict(l=10,r=60,t=40,b=10),
+                            height=280,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
                     else:
-                        st.info("No memory data from Prometheus yet")
+                        st.info("No memory data yet")
                 else:
                     st.info("Waiting for Prometheus memory data")
         except Exception as e:
             st.warning(f"Could not load Prometheus metrics: {e}")
     else:
-        st.info("Prometheus unreachable — start it with `kubectl apply -f k8s/prometheus/`")
+        st.info("Prometheus unreachable — start with `kubectl apply -f k8s/prometheus/`")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
