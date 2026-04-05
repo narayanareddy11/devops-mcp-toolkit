@@ -11,7 +11,7 @@
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-narayanareddy99910-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/u/narayanareddy99910)
 [![MCP Servers](https://img.shields.io/badge/MCP%20Servers-15-orange.svg)](#mcp-servers--185-tools)
 [![Tools](https://img.shields.io/badge/Total%20Tools-185%2B-red.svg)](#mcp-servers--185-tools)
-[![Services](https://img.shields.io/badge/Services-12-9cf.svg)](#service-credentials)
+[![Services](https://img.shields.io/badge/Services-13-9cf.svg)](#-services--versions)
 
 ---
 
@@ -179,23 +179,55 @@ Each tool runs natively in Kubernetes and is accessible from your browser.
 
 ---
 
-## Service Credentials
+## 🛠 Services & Versions
+
+All services run as Kubernetes pods in the `devops` namespace (ArgoCD in `argocd`).
+
+| # | Service | Version | URL | Port | Namespace |
+|---|---------|---------|-----|------|-----------|
+| 1 | **Jenkins** | `2.541.3 LTS` | http://localhost:30080 | 30080 | devops |
+| 2 | **SonarQube** | `26.3.0 Community` | http://localhost:30900 | 30900 | devops |
+| 3 | **Grafana** | `12.4.2` | http://localhost:30030 | 30030 | devops |
+| 4 | **Prometheus** | `3.11.0` | http://localhost:30090 | 30090 | devops |
+| 5 | **Loki** | `3.0.0` | http://localhost:30310 | 30310 | devops |
+| 6 | **Promtail** | `3.0.0` | internal | — | devops |
+| 7 | **HashiCorp Vault** | `1.17.6` | http://localhost:30200 | 30200 | devops |
+| 8 | **ArgoCD** | `v3.3.6` | https://localhost:30085 | 30085/30086 | argocd |
+| 9 | **MinIO** | `RELEASE.2025-09-07` | http://localhost:30921 (UI) | 30920/30921 | devops |
+| 10 | **Nexus Repository** | `3.90.2-06 OSS` | http://localhost:30081 | 30081 | devops |
+| 11 | **Container Registry** | `registry:2` | http://localhost:30880 | 30880/30881 | devops |
+| 12 | **PostgreSQL** | `15.17` | ClusterIP only | internal | devops |
+| 13 | **Registry UI** | `2.6.0` | http://localhost:30881 | 30881 | devops |
+
+### Supporting CLI Tools
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Kubernetes | `v1.32.2` | Container orchestration (Docker Desktop) |
+| Helm | `v3.17.3` | Kubernetes package manager |
+| Terraform | `1.5.7` | Infrastructure as Code |
+| Trivy | `0.69.3` | CVE & IaC vulnerability scanner |
+| Docker | latest | Container runtime |
+
+---
+
+## 🔑 Service Credentials
 
 | Service | URL | Username | Password / Token |
 |---------|-----|----------|:----------------:|
-| Jenkins | http://localhost:30080 | admin | `Admin@123456789@` |
-| SonarQube | http://localhost:30900 | admin | `Admin@123456789@` |
-| Grafana | http://localhost:30030 | admin | `Admin@123456789@` |
+| Jenkins | http://localhost:30080 | `admin` | `Admin@123456789@` |
+| SonarQube | http://localhost:30900 | `admin` | `Admin@123456789@` |
+| Grafana | http://localhost:30030 | `admin` | `Admin@123456789@` |
 | Prometheus | http://localhost:30090 | — | no auth |
-| ArgoCD | https://localhost:30085 | admin | `Admin@123456789@` |
+| ArgoCD | https://localhost:30085 | `admin` | `Admin@123456789@` |
 | HashiCorp Vault | http://localhost:30200 | — | token: `root` |
-| MinIO API | http://localhost:30920 | admin | `Admin@123456789@` |
-| MinIO Console | http://localhost:30921 | admin | `Admin@123456789@` |
-| Nexus | http://localhost:30081 | admin | `Admin@123456789@` |
+| MinIO API | http://localhost:30920 | `admin` | `Admin@123456789@` |
+| MinIO Console | http://localhost:30921 | `admin` | `Admin@123456789@` |
+| Nexus | http://localhost:30081 | `admin` | `Admin@123456789@` |
 | Container Registry | http://localhost:30880 | — | no auth |
 | Registry UI | http://localhost:30881 | — | no auth |
 | Loki | http://localhost:30310 | — | no auth |
-| PostgreSQL (internal) | ClusterIP only | sonar | `sonar` |
+| PostgreSQL (internal) | ClusterIP only | `sonar` | `sonar` |
 
 ---
 
