@@ -91,6 +91,8 @@ Each tool runs natively in Kubernetes and is accessible from your browser.
 
 ![SonarQube UI](docs/screenshots/tool_sonarqube.png)
 
+> Projects dashboard — shows quality gate status, security ratings, and reliability scores per project.
+
 ---
 
 ### Grafana — Dashboards & Visualization
@@ -117,9 +119,11 @@ Each tool runs natively in Kubernetes and is accessible from your browser.
 ### HashiCorp Vault — Secrets Management
 > `http://localhost:30200` &nbsp;·&nbsp; Token: `root`
 
-Login: select **Token** method → enter `root` → Sign In
+**Login:** Select **Token** method → enter `root` → click **Sign in**
 
-![Vault UI](docs/screenshots/tool_vault.png)
+| Login Page | After Login |
+|:----------:|:-----------:|
+| ![Vault Login](docs/screenshots/tool_vault_login.png) | ![Vault UI](docs/screenshots/tool_vault.png) |
 
 ---
 
@@ -127,6 +131,8 @@ Login: select **Token** method → enter `root` → Sign In
 > `http://localhost:30921` (Console) &nbsp;·&nbsp; admin / Admin@123456789@
 
 ![MinIO UI](docs/screenshots/tool_minio.png)
+
+> Object Browser — shows buckets, objects, size, last modified. Use **Create Bucket** / **Upload** buttons to manage storage.
 
 ---
 
