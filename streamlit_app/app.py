@@ -299,87 +299,154 @@ with st.sidebar:
     if "active_page" not in st.session_state:
         st.session_state["active_page"] = "🏠 Dashboard"
 
-    # ── Live status dots for sidebar labels ──────────────────────────────────
-    def _dot(port, host="localhost"):
-        if port == 0:
-            return "🔵"
-        return "🟢" if port_up(port, host=host) else "🔴"
-
-    _dj  = _dot(30080); _ds  = _dot(30900); _da  = _dot(30085)
-    _dg  = _dot(30030); _dp  = _dot(30090); _dv  = _dot(30200)
-    _dl  = _dot(30310); _dreg= _dot(30880, host="127.0.0.1")
-    _dm  = _dot(30921); _dn  = _dot(30081); _dh  = _dot(30880, host="127.0.0.1")
-
-    def _nav(key):
-        st.session_state["active_page"] = st.session_state[key]
-
-    def _grp_header(label):
-        st.markdown(
-            f'<p style="font-size:0.7rem;color:#546e7a;text-transform:uppercase;'
-            f'letter-spacing:0.1em;margin:0.8rem 0 0.3rem 0;">{label}</p>',
-            unsafe_allow_html=True,
-        )
-
-    # ── OVERVIEW ─────────────────────────────────────────────────────────────
-    _grp_header("Overview")
-    st.radio("Overview", ["🏠 Dashboard"], key="nav_overview",
-             label_visibility="collapsed", on_change=_nav, args=("nav_overview",))
-
-    # ── INFRASTRUCTURE ────────────────────────────────────────────────────────
-    _grp_header("Infrastructure")
-    st.radio("Infrastructure",
-             ["🐳 Docker", "☸️ Kubernetes", "🌍 Terraform"],
-             key="nav_infra", label_visibility="collapsed",
-             on_change=_nav, args=("nav_infra",))
-
-    # ── CI / CD ───────────────────────────────────────────────────────────────
-    _grp_header("CI / CD")
-    st.radio("CI/CD",
-             [f"{_dj} ⚙️ Jenkins", f"{_ds} 🔍 SonarQube", f"{_da} 🔀 ArgoCD"],
-             key="nav_cicd", label_visibility="collapsed",
-             on_change=_nav, args=("nav_cicd",))
-
-    # ── SECURITY ──────────────────────────────────────────────────────────────
-    _grp_header("Security")
-    st.radio("Security",
-             [f"🔵 🛡️ Trivy Scanner", f"{_dv} 🔐 Vault Secrets"],
-             key="nav_sec", label_visibility="collapsed",
-             on_change=_nav, args=("nav_sec",))
-
-    # ── OBSERVABILITY ─────────────────────────────────────────────────────────
-    _grp_header("Observability")
-    st.radio("Observability",
-             [f"{_dp} 📊 Prometheus & Grafana", f"{_dl} 📜 Loki Logs"],
-             key="nav_obs", label_visibility="collapsed",
-             on_change=_nav, args=("nav_obs",))
-
-    # ── DEPLOYMENT ────────────────────────────────────────────────────────────
-    _grp_header("Deployment")
-    st.radio("Deployment",
-             ["🔵 ⛵ Helm Manager"],
-             key="nav_dep", label_visibility="collapsed",
-             on_change=_nav, args=("nav_dep",))
-
-    # ── STORAGE & REGISTRY ────────────────────────────────────────────────────
-    _grp_header("Storage & Registry")
-    st.radio("Storage",
-             [f"{_dreg} 📦 Container Registry",
-              f"{_dm} 🗄️ MinIO Storage",
-              f"{_dn} 🏛️ Nexus Repository"],
-             key="nav_stor", label_visibility="collapsed",
-             on_change=_nav, args=("nav_stor",))
-
-    # ── Resolve active page (strip leading dot prefix from radio labels) ──────
+    # ── Strip status-dot prefix from radio labels ─────────────────────────────
     def _strip_dot(label):
-        """Remove leading status dot emoji added to radio labels."""
+        if not label:
+            return label
         for dot in ("🟢 ", "🔴 ", "🔵 "):
             if label.startswith(dot):
                 return label[len(dot):]
         return label
 
-    _raw = st.session_state.get("active_page", "🏠 Dashboard")
-    active_page = _strip_dot(_raw)
-    st.session_state["active_page"] = active_page   # normalise
+    # ── on_change: only update active_page when a real value is selected ──────
+    def _nav(key):
+        val = st.session_state.get(key)
+        if val:
+            st.session_state["active_page"] = _strip_dot(val)
+
+    # ── Live status dots ──────────────────────────────────────────────────────
+    def _dot(port, host="localhost"):
+        if port == 0:
+            return "🔵"
+        return "🟢" if port_up(port, host=host) else "🔴"
+
+    _dj   = _dot(30080);  _ds  = _dot(30900);  _da  = _dot(30085)
+    _dp   = _dot(30090);  _dv  = _dot(30200);  _dl  = _dot(30310)
+    _dreg = _dot(30880, host="127.0.0.1")
+    _dm   = _dot(30921);  _dn  = _dot(30081)
+
+    def _grp_header(label):
+        st.markdown(
+            f'<p style="font-size:0.68rem;color:#546e7a;text-transform:uppercase;'
+            f'letter-spacing:0.1em;margin:0.75rem 0 0.25rem 0;">{label}</p>',
+            unsafe_allow_html=True,
+        )
+
+    # URL param support (screenshot automation)
+    _PAGE_MAP = {
+        "dashboard": "🏠 Dashboard", "docker": "🐳 Docker",
+        "kubernetes": "☸️ Kubernetes", "terraform": "🌍 Terraform",
+        "jenkins": "⚙️ Jenkins", "sonarqube": "🔍 SonarQube",
+        "argocd": "🔀 ArgoCD", "trivy": "🛡️ Trivy Scanner",
+        "vault": "🔐 Vault Secrets", "prometheus": "📊 Prometheus & Grafana",
+        "loki": "📜 Loki Logs", "helm": "⛵ Helm Manager",
+        "registry": "📦 Container Registry", "minio": "🗄️ MinIO Storage",
+        "nexus": "🏛️ Nexus Repository",
+    }
+    _qp = st.query_params.get("page", "")
+    if _qp and _qp in _PAGE_MAP:
+        st.session_state["active_page"] = _PAGE_MAP[_qp]
+
+    # ── Navigation radio groups ───────────────────────────────────────────────
+    # Overview: index=0  →  Dashboard selected by default
+    # All others: index=None  →  nothing selected (unchecked) by default
+
+    _grp_header("Overview")
+    st.radio("Overview", ["🏠 Dashboard"], key="nav_overview", index=0,
+             label_visibility="collapsed", on_change=_nav, args=("nav_overview",))
+
+    _grp_header("Infrastructure")
+    st.radio("Infrastructure", ["🐳 Docker", "☸️ Kubernetes", "🌍 Terraform"],
+             key="nav_infra", index=None,
+             label_visibility="collapsed", on_change=_nav, args=("nav_infra",))
+
+    _grp_header("CI / CD")
+    st.radio("CI/CD",
+             [f"{_dj} ⚙️ Jenkins", f"{_ds} 🔍 SonarQube", f"{_da} 🔀 ArgoCD"],
+             key="nav_cicd", index=None,
+             label_visibility="collapsed", on_change=_nav, args=("nav_cicd",))
+
+    _grp_header("Security")
+    st.radio("Security",
+             [f"🔵 🛡️ Trivy Scanner", f"{_dv} 🔐 Vault Secrets"],
+             key="nav_sec", index=None,
+             label_visibility="collapsed", on_change=_nav, args=("nav_sec",))
+
+    _grp_header("Observability")
+    st.radio("Observability",
+             [f"{_dp} 📊 Prometheus & Grafana", f"{_dl} 📜 Loki Logs"],
+             key="nav_obs", index=None,
+             label_visibility="collapsed", on_change=_nav, args=("nav_obs",))
+
+    _grp_header("Deployment")
+    st.radio("Deployment", ["🔵 ⛵ Helm Manager"],
+             key="nav_dep", index=None,
+             label_visibility="collapsed", on_change=_nav, args=("nav_dep",))
+
+    _grp_header("Storage & Registry")
+    st.radio("Storage",
+             [f"{_dreg} 📦 Container Registry",
+              f"{_dm} 🗄️ MinIO Storage",
+              f"{_dn} 🏛️ Nexus Repository"],
+             key="nav_stor", index=None,
+             label_visibility="collapsed", on_change=_nav, args=("nav_stor",))
+
+    active_page = st.session_state.get("active_page", "🏠 Dashboard")
+
+    # ── MCP Services status + URL panel ──────────────────────────────────────
+    st.divider()
+    st.markdown(
+        '<p style="font-size:0.68rem;color:#546e7a;text-transform:uppercase;'
+        'letter-spacing:0.1em;margin:0 0 0.4rem 0;">🔌 MCP Services & URLs</p>',
+        unsafe_allow_html=True,
+    )
+
+    _SVC_PANEL = [
+        ("⚙️", "Jenkins",            30080, "http://localhost:30080",   "localhost"),
+        ("🔍", "SonarQube",          30900, "http://localhost:30900",   "localhost"),
+        ("🔀", "ArgoCD",             30085, "https://localhost:30085",  "localhost"),
+        ("📊", "Prometheus",         30090, "http://localhost:30090",   "localhost"),
+        ("📈", "Grafana",            30030, "http://localhost:30030",   "localhost"),
+        ("🔐", "Vault",              30200, "http://localhost:30200",   "localhost"),
+        ("📜", "Loki",               30310, "http://localhost:30310",   "localhost"),
+        ("📦", "Harbor Registry",    30880, "http://127.0.0.1:30881",  "127.0.0.1"),
+        ("🗄️", "MinIO Console",      30921, "http://localhost:30921",   "localhost"),
+        ("🏛️", "Nexus",             30081, "http://localhost:30081",   "localhost"),
+        ("☸️", "Kubernetes",         0,     "",                         ""),
+        ("🐳", "Docker",             0,     "",                         ""),
+        ("🌍", "Terraform",          0,     "",                         ""),
+        ("🛡️", "Trivy",              0,     "",                         ""),
+        ("⛵", "Helm",               0,     "",                         ""),
+    ]
+
+    _html = ""
+    for _ico, _name, _port, _url, _host in _SVC_PANEL:
+        if _port > 0:
+            _up = port_up(_port, host=_host or "localhost")
+            _dc  = "#4caf50" if _up else "#f44336"
+            _stxt = "UP" if _up else "DOWN"
+            _link = (f'<a href="{_url}" target="_blank" '
+                     f'style="color:#64b5f6;font-size:0.6rem;text-decoration:none;">'
+                     f'{_url.replace("http://","").replace("https://","")}</a>') if _url else ""
+        else:
+            _dc, _stxt, _link = "#78909c", "CLI", ""
+
+        _html += f"""
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    padding:3px 6px;margin:2px 0;border-radius:6px;
+                    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);">
+          <div style="display:flex;align-items:center;gap:5px;min-width:0;">
+            <span style="width:7px;height:7px;border-radius:50%;background:{_dc};
+                         display:inline-block;flex-shrink:0;"></span>
+            <span style="font-size:0.78rem;color:#cfd8dc;white-space:nowrap;">{_ico} {_name}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0px;flex-shrink:0;">
+            <span style="font-size:0.62rem;font-weight:bold;color:{_dc};">{_stxt}</span>
+            {f'<span>{_link}</span>' if _link else ""}
+          </div>
+        </div>"""
+
+    st.markdown(_html, unsafe_allow_html=True)
 
     st.divider()
     auto_refresh = st.toggle("⟳ Auto-refresh (30s)", value=False)
