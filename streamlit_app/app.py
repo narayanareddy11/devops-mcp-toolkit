@@ -31,8 +31,12 @@ VAULT_TOKEN       = "root"
 LOKI_URL          = "http://localhost:30310"
 REGISTRY_URL      = "http://127.0.0.1:30880"
 REGISTRY_UI_URL   = "http://127.0.0.1:30881"
+HARBOR_URL        = "http://127.0.0.1:30880"
+HARBOR_AUTH       = ("admin", "Admin@123456789@")
 MINIO_URL         = "http://localhost:30920"
 MINIO_CONSOLE_URL = "http://localhost:30921"
+MINIO_ACCESS_KEY  = "admin"
+MINIO_SECRET_KEY  = "Admin@123456789@"
 NEXUS_URL         = "http://localhost:30081"
 NEXUS_AUTH        = ("admin", "Admin@123456789@")
 
