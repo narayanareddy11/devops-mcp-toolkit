@@ -1200,42 +1200,77 @@ elif active_page == "⚙️ Jenkins":
         st.info("Jenkins unreachable — check if the pod is running: `kubectl get pods -n devops`")
         st.stop()
 
-    tab1, tab2, tab3 = st.tabs(["📋 Jobs", "🔨 Build History", "⚡ Trigger"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📋 Jobs", "🔨 Build History", "🚀 Trigger Build", "➕ Create Job", "🗑️ Delete Job"
+    ])
 
+    # ── shared job list (cached) ──────────────────────────────────────────────
+    @st.cache_data(ttl=30)
+    def get_jenkins_jobs():
+        return http_json(
+            f"{JENKINS_URL}/api/json?tree=jobs[name,color,lastBuild[number,result,timestamp,duration,url]]",
+            auth=JENKINS_AUTH
+        )
+
+    @st.cache_data(ttl=30)
+    def get_job_names():
+        d = http_json(f"{JENKINS_URL}/api/json?tree=jobs[name]", auth=JENKINS_AUTH)
+        return [j["name"] for j in (d.get("jobs") or [])] if d else []
+
+    # ── TAB 1: Jobs ───────────────────────────────────────────────────────────
     with tab1:
-        @st.cache_data(ttl=30)
-        def get_jenkins_jobs():
-            return http_json(
-                f"{JENKINS_URL}/api/json?tree=jobs[name,color,lastBuild[number,result,timestamp,duration,url]]",
-                auth=JENKINS_AUTH
-            )
-
+        import pandas as pd
         data = get_jenkins_jobs()
         if data and data.get("jobs"):
-            import pandas as pd
             rows = []
             for job in data["jobs"]:
-                lb = job.get("lastBuild") or {}
+                lb     = job.get("lastBuild") or {}
                 result = lb.get("result") or ("BUILDING" if lb else "—")
+                color  = job.get("color", "")
                 rows.append({
-                    "Job Name":   job.get("name", ""),
-                    "Status":     result,
-                    "Build #":    lb.get("number", ""),
-                    "Duration":   f"{int(lb.get('duration', 0)/1000)}s" if lb.get("duration") else "",
+                    "Job Name": job.get("name", ""),
+                    "Status":   result,
+                    "Build #":  lb.get("number", ""),
+                    "Duration": f"{int(lb.get('duration',0)/1000)}s" if lb.get("duration") else "—",
+                    "Health":   "🟢" if color == "blue" else ("🔴" if color == "red" else "⚪"),
                 })
-            df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
 
-            success = sum(1 for r in rows if r["Status"] == "SUCCESS")
-            failed  = sum(1 for r in rows if r["Status"] == "FAILURE")
-            jm1, jm2, jm3 = st.columns(3)
+            df = pd.DataFrame(rows)
+
+            def _row_color(row):
+                s = row.get("Status","")
+                if s == "SUCCESS": return ["background-color:#0a2a0a"]*len(row)
+                if s == "FAILURE": return ["background-color:#2a0a0a"]*len(row)
+                if s == "BUILDING":return ["background-color:#1a1a00"]*len(row)
+                return [""]*len(row)
+
+            st.dataframe(df.style.apply(_row_color, axis=1),
+                         use_container_width=True, hide_index=True)
+
+            jm1, jm2, jm3, jm4 = st.columns(4)
             jm1.metric("Total Jobs", len(rows))
-            jm2.metric("SUCCESS", success)
-            jm3.metric("FAILURE", failed)
+            jm2.metric("✅ SUCCESS", sum(1 for r in rows if r["Status"]=="SUCCESS"))
+            jm3.metric("❌ FAILURE", sum(1 for r in rows if r["Status"]=="FAILURE"))
+            jm4.metric("🔄 Building", sum(1 for r in rows if r["Status"]=="BUILDING"))
+
+            st.divider()
+            st.markdown("##### Job Console Output")
+            sel_console = st.selectbox("Select job for last console log", [r["Job Name"] for r in rows], key="console_sel")
+            if st.button("📄 View Console", key="view_console"):
+                import httpx
+                try:
+                    r = httpx.get(f"{JENKINS_URL}/job/{sel_console}/lastBuild/consoleText",
+                                  auth=JENKINS_AUTH, timeout=10, follow_redirects=True)
+                    st.code(r.text[-4000:] if len(r.text) > 4000 else r.text, language="bash")
+                except Exception as e:
+                    st.error(f"Could not fetch console: {e}")
         else:
             st.info("No jobs found or Jenkins unreachable")
 
+    # ── TAB 2: Build History ──────────────────────────────────────────────────
     with tab2:
+        import pandas as pd, datetime as _dt
+
         @st.cache_data(ttl=30)
         def get_all_builds():
             jobs_data = http_json(
@@ -1246,52 +1281,277 @@ elif active_page == "⚙️ Jenkins":
             if jobs_data:
                 for job in (jobs_data.get("jobs") or []):
                     for b in (job.get("builds") or [])[:5]:
-                        import datetime
                         ts = b.get("timestamp", 0) / 1000
                         builds.append({
                             "Job":      job.get("name", ""),
                             "Build #":  b.get("number", ""),
                             "Result":   b.get("result") or "BUILDING",
-                            "Duration": f"{int(b.get('duration', 0)/1000)}s",
-                            "Started":  datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "",
+                            "Duration": f"{int(b.get('duration',0)/1000)}s",
+                            "Started":  _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "",
                         })
-            return sorted(builds, key=lambda x: x.get("Started", ""), reverse=True)[:30]
+            return sorted(builds, key=lambda x: x.get("Started",""), reverse=True)[:50]
 
         builds = get_all_builds()
         if builds:
-            import pandas as pd
-            st.dataframe(pd.DataFrame(builds), use_container_width=True, hide_index=True)
+            bdf = pd.DataFrame(builds)
+
+            # Filter controls
+            fc1, fc2 = st.columns([2, 1])
+            with fc1:
+                filter_job = st.selectbox("Filter by job", ["All"] + list(bdf["Job"].unique()), key="bh_job")
+            with fc2:
+                filter_res = st.selectbox("Filter by result", ["All", "SUCCESS", "FAILURE", "BUILDING"], key="bh_res")
+
+            if filter_job != "All":
+                bdf = bdf[bdf["Job"] == filter_job]
+            if filter_res != "All":
+                bdf = bdf[bdf["Result"] == filter_res]
+
+            def _build_color(row):
+                s = row.get("Result","")
+                if s == "SUCCESS": return ["background-color:#0a2a0a"]*len(row)
+                if s == "FAILURE": return ["background-color:#2a0a0a"]*len(row)
+                if s == "BUILDING":return ["background-color:#1a1a00"]*len(row)
+                return [""]*len(row)
+
+            st.dataframe(bdf.style.apply(_build_color, axis=1),
+                         use_container_width=True, hide_index=True)
+
+            b1, b2, b3 = st.columns(3)
+            b1.metric("Total Shown", len(bdf))
+            b2.metric("✅ Success",  int((bdf["Result"]=="SUCCESS").sum()))
+            b3.metric("❌ Failure",  int((bdf["Result"]=="FAILURE").sum()))
         else:
             st.info("No build history found")
 
+    # ── TAB 3: Trigger Build ──────────────────────────────────────────────────
     with tab3:
-        data2 = http_json(f"{JENKINS_URL}/api/json?tree=jobs[name]", auth=JENKINS_AUTH)
-        job_names = [j["name"] for j in (data2.get("jobs") or [])] if data2 else []
+        job_names = get_job_names()
         if job_names:
-            sel_job = st.selectbox("Select job to trigger", job_names)
-            params_input = st.text_area("Build parameters (KEY=VALUE per line, optional)")
-            if st.button("🚀 Trigger Build", type="primary"):
-                crumb = jenkins_crumb()
-                params = {}
-                if params_input.strip():
-                    for line in params_input.strip().splitlines():
-                        if "=" in line:
-                            k, v = line.split("=", 1)
-                            params[k.strip()] = v.strip()
-                if params:
-                    code, resp = http_post(
-                        f"{JENKINS_URL}/job/{sel_job}/buildWithParameters",
-                        auth=JENKINS_AUTH, data=params, headers=crumb
-                    )
+            tc1, tc2 = st.columns([2, 1])
+            with tc1:
+                sel_job = st.selectbox("Select job to trigger", job_names, key="trig_sel")
+            with tc2:
+                st.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
+                open_job = st.link_button("🔗 Open in Jenkins", f"{JENKINS_URL}/job/{sel_job}" if sel_job else JENKINS_URL)
+
+            params_input = st.text_area("Build parameters (KEY=VALUE per line, optional)",
+                                        placeholder="BRANCH=main\nENV=staging", key="trig_params")
+
+            t_col1, t_col2 = st.columns([1, 3])
+            with t_col1:
+                if st.button("🚀 Trigger Build", type="primary", use_container_width=True):
+                    with st.spinner(f"Triggering {sel_job}..."):
+                        crumb = jenkins_crumb()
+                        params = {}
+                        if params_input.strip():
+                            for line in params_input.strip().splitlines():
+                                if "=" in line:
+                                    k, v = line.split("=", 1)
+                                    params[k.strip()] = v.strip()
+                        url = f"{JENKINS_URL}/job/{sel_job}/buildWithParameters" if params else f"{JENKINS_URL}/job/{sel_job}/build"
+                        code, resp = http_post(url, auth=JENKINS_AUTH, data=params or {}, headers=crumb)
+                    if code in (200, 201):
+                        st.success(f"✅ Build triggered for **{sel_job}** — check Build History tab")
+                        st.cache_data.clear()
+                    else:
+                        st.error(f"❌ Failed (HTTP {code}): {resp}")
+        else:
+            st.info("No jobs available")
+
+    # ── TAB 4: Create Job ─────────────────────────────────────────────────────
+    with tab4:
+        st.markdown("##### ➕ Create a New Jenkins Job")
+
+        cr1, cr2 = st.columns(2)
+        with cr1:
+            new_job_name = st.text_input("Job Name", placeholder="my-new-pipeline", key="new_job_name")
+            job_type     = st.radio("Job Type", ["Freestyle", "Pipeline"], horizontal=True, key="new_job_type")
+            description  = st.text_input("Description (optional)", key="new_job_desc")
+
+        with cr2:
+            if job_type == "Freestyle":
+                shell_cmd = st.text_area("Shell command to run",
+                                         placeholder="echo 'Hello from Jenkins'\nls -la",
+                                         height=120, key="new_job_shell")
+                git_url   = st.text_input("Git repo URL (optional)", key="new_job_git")
+            else:
+                pipeline_script = st.text_area(
+                    "Pipeline script (Groovy)",
+                    value="""pipeline {
+    agent any
+    stages {
+        stage('Build') {
+            steps {
+                echo 'Building...'
+            }
+        }
+        stage('Test') {
+            steps {
+                echo 'Testing...'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                echo 'Deploying...'
+            }
+        }
+    }
+}""",
+                    height=240, key="new_job_pipeline")
+
+        st.markdown("")
+        if st.button("✅ Create Job", type="primary", key="create_job_btn"):
+            if not new_job_name.strip():
+                st.error("Job name is required")
+            else:
+                import xml.sax.saxutils as saxutils
+                safe_desc = saxutils.escape(description)
+                safe_name = new_job_name.strip()
+
+                if job_type == "Freestyle":
+                    scm_block = ""
+                    if git_url.strip():
+                        safe_git = saxutils.escape(git_url.strip())
+                        scm_block = f"""<scm class="hudson.plugins.git.GitSCM" plugin="git">
+  <configVersion>2</configVersion>
+  <userRemoteConfigs>
+    <hudson.plugins.git.UserRemoteConfig>
+      <url>{safe_git}</url>
+    </hudson.plugins.git.UserRemoteConfig>
+  </userRemoteConfigs>
+  <branches><hudson.plugins.git.BranchSpec><name>*/main</name></hudson.plugins.git.BranchSpec></branches>
+  <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+  <submoduleCfg class="empty-list"/>
+  <extensions/>
+</scm>"""
+                    else:
+                        scm_block = '<scm class="hudson.scm.NullSCM"/>'
+
+                    builder_block = ""
+                    if shell_cmd.strip():
+                        safe_cmd = saxutils.escape(shell_cmd.strip())
+                        builder_block = f"""<builders>
+  <hudson.tasks.Shell>
+    <command>{safe_cmd}</command>
+  </hudson.tasks.Shell>
+</builders>"""
+                    else:
+                        builder_block = "<builders/>"
+
+                    xml_config = f"""<?xml version='1.1' encoding='UTF-8'?>
+<project>
+  <description>{safe_desc}</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  {scm_block}
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  {builder_block}
+  <publishers/>
+  <buildWrappers/>
+</project>"""
                 else:
-                    code, resp = http_post(
-                        f"{JENKINS_URL}/job/{sel_job}/build",
-                        auth=JENKINS_AUTH, data={}, headers=crumb
-                    )
-                if code in (200, 201):
-                    st.success(f"Build triggered for {sel_job}")
+                    safe_script = saxutils.escape(pipeline_script)
+                    xml_config = f"""<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <description>{safe_desc}</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
+    <script>{safe_script}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>"""
+
+                with st.spinner(f"Creating job '{safe_name}'..."):
+                    import httpx
+                    crumb = jenkins_crumb()
+                    headers = {"Content-Type": "application/xml"}
+                    headers.update(crumb)
+                    try:
+                        r = httpx.post(
+                            f"{JENKINS_URL}/createItem?name={safe_name}",
+                            auth=JENKINS_AUTH,
+                            content=xml_config.encode("utf-8"),
+                            headers=headers,
+                            timeout=15,
+                            follow_redirects=True,
+                        )
+                        if r.status_code in (200, 201):
+                            st.success(f"✅ Job **{safe_name}** created successfully!")
+                            st.link_button("Open Job", f"{JENKINS_URL}/job/{safe_name}")
+                            st.cache_data.clear()
+                        elif r.status_code == 400:
+                            st.error(f"❌ Job already exists or invalid name: {r.text[:200]}")
+                        else:
+                            st.error(f"❌ Failed (HTTP {r.status_code}): {r.text[:300]}")
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+
+    # ── TAB 5: Delete Job ─────────────────────────────────────────────────────
+    with tab5:
+        st.markdown("##### 🗑️ Delete a Jenkins Job")
+        st.warning("⚠️ Deletion is permanent and cannot be undone.", icon="⚠️")
+
+        job_names_del = get_job_names()
+        if job_names_del:
+            del1, del2 = st.columns([2, 1])
+            with del1:
+                del_job = st.selectbox("Select job to delete", job_names_del, key="del_job_sel")
+            with del2:
+                st.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
+                st.link_button("🔗 View Job", f"{JENKINS_URL}/job/{del_job}")
+
+            # Show last build info before deletion
+            if del_job:
+                job_info = http_json(
+                    f"{JENKINS_URL}/job/{del_job}/api/json?tree=name,description,lastBuild[number,result,timestamp]",
+                    auth=JENKINS_AUTH
+                )
+                if job_info:
+                    lb = job_info.get("lastBuild") or {}
+                    di1, di2, di3 = st.columns(3)
+                    di1.metric("Job", job_info.get("name",""))
+                    di2.metric("Last Build #", lb.get("number","—"))
+                    di3.metric("Last Result", lb.get("result") or "—")
+                    if job_info.get("description"):
+                        st.caption(f"Description: {job_info['description']}")
+
+            confirm_name = st.text_input(
+                f'Type **{del_job}** to confirm deletion',
+                placeholder=del_job, key="del_confirm"
+            )
+            st.markdown("")
+
+            if st.button("🗑️ Delete Job", type="primary", key="del_job_btn"):
+                if confirm_name.strip() != del_job:
+                    st.error(f"❌ Name mismatch — type the exact job name to confirm")
                 else:
-                    st.error(f"Failed to trigger build (HTTP {code}): {resp}")
+                    with st.spinner(f"Deleting '{del_job}'..."):
+                        import httpx
+                        crumb = jenkins_crumb()
+                        try:
+                            r = httpx.post(
+                                f"{JENKINS_URL}/job/{del_job}/doDelete",
+                                auth=JENKINS_AUTH,
+                                headers=crumb,
+                                timeout=15,
+                                follow_redirects=True,
+                            )
+                            if r.status_code in (200, 201, 302):
+                                st.success(f"✅ Job **{del_job}** deleted successfully")
+                                st.cache_data.clear()
+                            else:
+                                st.error(f"❌ Failed (HTTP {r.status_code}): {r.text[:200]}")
+                        except Exception as e:
+                            st.error(f"❌ Error: {e}")
         else:
             st.info("No jobs available")
 
