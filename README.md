@@ -1,6 +1,6 @@
 # DevOps MCP Toolkit
 
-> **15 MCP servers** that let Claude AI control a complete local DevOps stack running on Kubernetes (Docker Desktop) — no cloud account required.
+> **15 MCP servers** to manage a complete local DevOps stack running on Kubernetes (Docker Desktop) — no cloud account required.
 
 [![Release](https://img.shields.io/badge/Release-v4.0.0-brightgreen.svg)](https://github.com/narayanareddy99910/mcp-server-01/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -15,7 +15,7 @@
 
 ---
 
-## 🤖 MCP Tools & Versions
+## 🛠️ MCP Tools & Versions
 
 > **Runtime:** Python `3.13.5` &nbsp;·&nbsp; MCP SDK `1.27.0` &nbsp;·&nbsp; Transport: `stdio`
 
@@ -42,7 +42,7 @@
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `mcp[cli]` | `1.27.0` | Model Context Protocol SDK — FastMCP server framework |
+| `mcp[cli]` | `1.27.0` | MCP SDK — FastMCP server framework |
 | `httpx` | `0.28.1` | Async HTTP client for REST API calls |
 | `streamlit` | `1.32.0` | Visual control panel dashboard |
 | `plotly` | `5.20.0` | Interactive charts (CPU/memory usage graphs) |
@@ -52,19 +52,19 @@
 
 ## What Is This?
 
-Claude can talk directly to your local DevOps tools — start Jenkins builds, query Prometheus metrics, scan images with Trivy, manage Vault secrets, deploy with ArgoCD, push images to the Container Registry, manage MinIO buckets, and much more — all through natural language via the **Model Context Protocol (MCP)**.
+A fully local DevOps platform built on Kubernetes (Docker Desktop) with **15 MCP servers** that expose every tool's API as callable functions — trigger Jenkins builds, query Prometheus metrics, scan images with Trivy, manage Vault secrets, deploy with ArgoCD, push images to the Container Registry, manage MinIO buckets, and much more.
 
 A **Streamlit control panel** provides a rich visual interface to all 15 tools with live status, forms, actions, and charts — no CLI needed.
 
 ### Key Features
 
-- 🤖 **Claude AI control** — talk to your entire DevOps stack in plain English
 - 🎛️ **15-page Streamlit dashboard** — visual control panel with KPI cards, live status, Plotly charts
 - ☸️ **Kubernetes-native** — all services run on Docker Desktop K8s, zero cloud cost
 - 🔒 **Security-first** — Trivy CVE scanning, Vault secrets, SonarQube code analysis
 - 📦 **Full GitOps** — ArgoCD app management, sync, rollback, repo management
 - 🏗️ **IaC ready** — Terraform workspace management, plan preview, state inspection
 - 📊 **Full observability** — Prometheus metrics, Grafana dashboards, Loki log queries
+- 🔌 **MCP protocol** — 213 tools across 15 servers, all accessible via the Model Context Protocol
 
 ---
 
@@ -349,55 +349,55 @@ kubectl get pods -n devops
 kubectl get pods -n argocd
 ```
 
-### 2 — Register all MCP servers with Claude
+### 2 — Register all MCP servers
 
 ```bash
-claude mcp add docker-manager    -- python3 servers/01_docker_manager.py
-claude mcp add terraform-manager -- python3 servers/02_terraform_manager.py
-claude mcp add sonarqube-manager \
+mcp add docker-manager    -- python3 servers/01_docker_manager.py
+mcp add terraform-manager -- python3 servers/02_terraform_manager.py
+mcp add sonarqube-manager \
   -e SONAR_URL=http://localhost:30900 \
   -e SONAR_USER=admin \
   -e SONAR_PASS='Admin@123456789@' \
   -- python3 servers/03_sonarqube_manager.py
-claude mcp add jenkins-manager \
+mcp add jenkins-manager \
   -e JENKINS_URL=http://localhost:30080 \
   -e JENKINS_USER=admin \
   -e JENKINS_PASS='Admin@123456789@' \
   -- python3 servers/04_jenkins_manager.py
-claude mcp add devops-dashboard \
+mcp add devops-dashboard \
   -e JENKINS_URL=http://localhost:30080 -e JENKINS_USER=admin -e JENKINS_PASS='Admin@123456789@' \
   -e SONAR_URL=http://localhost:30900 -e SONAR_USER=admin -e SONAR_PASS='Admin@123456789@' \
   -- python3 servers/05_devops_dashboard.py
-claude mcp add kubernetes-manager -- python3 servers/06_kubernetes_manager.py
-claude mcp add prometheus-grafana \
+mcp add kubernetes-manager -- python3 servers/06_kubernetes_manager.py
+mcp add prometheus-grafana \
   -e PROMETHEUS_URL=http://localhost:30090 \
   -e GRAFANA_URL=http://localhost:30030 \
   -e GRAFANA_USER=admin \
   -e GRAFANA_PASS='Admin@123456789@' \
   -- python3 servers/07_prometheus_grafana.py
-claude mcp add argocd-manager \
+mcp add argocd-manager \
   -e ARGOCD_URL=https://localhost:30085 \
   -e ARGOCD_USER=admin \
   -e ARGOCD_PASS='Admin@123456789@' \
   -- python3 servers/08_argocd_manager.py
-claude mcp add trivy-scanner     -- python3 servers/09_trivy_scanner.py
-claude mcp add helm-manager      -- python3 servers/10_helm_manager.py
-claude mcp add vault-manager \
+mcp add trivy-scanner     -- python3 servers/09_trivy_scanner.py
+mcp add helm-manager      -- python3 servers/10_helm_manager.py
+mcp add vault-manager \
   -e VAULT_URL=http://localhost:30200 \
   -e VAULT_TOKEN=root \
   -- python3 servers/11_vault_manager.py
-claude mcp add loki-manager \
+mcp add loki-manager \
   -e LOKI_URL=http://localhost:30310 \
   -- python3 servers/12_loki_manager.py
-claude mcp add harbor-manager \
+mcp add harbor-manager \
   -e HARBOR_URL=http://127.0.0.1:30880 \
   -- python3 servers/13_harbor_manager.py
-claude mcp add minio-manager \
+mcp add minio-manager \
   -e MINIO_URL=http://localhost:30920 \
   -e MINIO_ACCESS_KEY=admin \
   -e MINIO_SECRET_KEY='Admin@123456789@' \
   -- python3 servers/14_minio_manager.py
-claude mcp add nexus-manager \
+mcp add nexus-manager \
   -e NEXUS_URL=http://localhost:30081 \
   -e NEXUS_USER=admin \
   -e NEXUS_PASS='Admin@123456789@' \
@@ -421,26 +421,36 @@ docker push 127.0.0.1:30880/nginx:latest
 
 ---
 
-## Example Claude Prompts
+## Example MCP Calls
 
-Once MCP servers are registered, try these in Claude:
+Once MCP servers are registered, these operations are available:
 
-```
-"Show me all running Kubernetes pods in the devops namespace"
-"Trigger the Jenkins pipeline named 'build-app'"
-"Scan the nginx:latest Docker image for critical CVEs with Trivy"
-"Create a SonarQube project called my-service"
-"Query Prometheus: average CPU usage across all pods last 5 minutes"
-"List all ArgoCD applications and their sync status"
-"Write a secret to Vault at path secret/myapp/config with key=value"
-"List all MinIO buckets and show their sizes"
-"Show recent error logs from Loki for the sonarqube pod"
-"Install the ingress-nginx Helm chart in the devops namespace"
-"List all Docker images larger than 500MB"
-"Run a Terraform plan in the local workdir"
-"Push busybox:latest to the local container registry"
-"Create a new Jenkins freestyle job called test-pipeline"
-"Show all Nexus repositories and their formats"
+```bash
+# Kubernetes
+list all running pods in the devops namespace
+apply a YAML manifest to the cluster
+
+# Jenkins
+trigger the pipeline named 'build-app'
+create a new freestyle job called test-pipeline
+
+# Security
+scan nginx:latest for critical CVEs with Trivy
+write a secret to Vault at path secret/myapp/config
+
+# Observability
+query Prometheus: average CPU usage across all pods last 5 minutes
+show recent error logs from Loki for the sonarqube pod
+
+# Storage & Registry
+list all MinIO buckets and show their sizes
+push busybox:latest to the local container registry
+show all Nexus repositories and their formats
+
+# GitOps & IaC
+list all ArgoCD applications and their sync status
+run a Terraform plan in the local workdir
+install the ingress-nginx Helm chart in the devops namespace
 ```
 
 ---
@@ -487,7 +497,7 @@ mcp-server-01/
 │   └── outputs.tf
 ├── docs/screenshots/               ← Tool UI + Streamlit dashboard screenshots
 ├── tests/                          ← pytest test suite
-├── claude_mcp_config.json          ← MCP server configuration
+├── mcp_config.json                 ← MCP server configuration
 ├── requirements.txt
 ├── LICENSE                         ← MIT
 └── README.md
@@ -499,7 +509,7 @@ mcp-server-01/
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│              Claude AI  (MCP Client)  +  Streamlit UI              │
+│               MCP Client  (any MCP host)  +  Streamlit UI           │
 └──────────────────────────┬─────────────────────────────────────────┘
                            │  MCP  (stdio transport)
            ┌───────────────┴───────────────────────────┐
@@ -590,7 +600,7 @@ mcp-server-01/
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-new-tool`
 3. Add your MCP server in `servers/` following the `FastMCP` pattern
-4. Register it in `claude_mcp_config.json`
+4. Register it in `mcp_config.json`
 5. Add a page to `streamlit_app/app.py`
 6. Submit a pull request
 
