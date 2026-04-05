@@ -296,10 +296,18 @@ with st.sidebar:
     if _qp and _qp in _PAGE_MAP:
         st.session_state["active_page"] = _PAGE_MAP[_qp]
 
+    # ── All nav group keys ────────────────────────────────────────────────────
+    _NAV_KEYS = ["nav_overview", "nav_infra", "nav_cicd",
+                 "nav_sec", "nav_obs", "nav_dep", "nav_stor"]
+
+    # First load: select Dashboard, clear all others
     if "active_page" not in st.session_state:
         st.session_state["active_page"] = "🏠 Dashboard"
+        st.session_state["nav_overview"] = "🏠 Dashboard"
+        for _k in _NAV_KEYS[1:]:
+            st.session_state[_k] = None
 
-    # ── Strip status-dot prefix from radio labels ─────────────────────────────
+    # ── Helpers ───────────────────────────────────────────────────────────────
     def _strip_dot(label):
         if not label:
             return label
@@ -308,17 +316,22 @@ with st.sidebar:
                 return label[len(dot):]
         return label
 
-    # ── on_change: only update active_page when a real value is selected ──────
     def _nav(key):
+        """Select page; deselect every other radio group."""
         val = st.session_state.get(key)
-        if val:
-            st.session_state["active_page"] = _strip_dot(val)
+        if not val:
+            return
+        st.session_state["active_page"] = _strip_dot(val)
+        # Keep current key's value, clear all others
+        current_val = val
+        for _k in _NAV_KEYS:
+            if _k != key:
+                st.session_state[_k] = None
+        st.session_state[key] = current_val  # ensure it stays selected
 
     # ── Live status dots ──────────────────────────────────────────────────────
     def _dot(port, host="localhost"):
-        if port == 0:
-            return "🔵"
-        return "🟢" if port_up(port, host=host) else "🔴"
+        return "🔵" if port == 0 else ("🟢" if port_up(port, host=host) else "🔴")
 
     _dj   = _dot(30080);  _ds  = _dot(30900);  _da  = _dot(30085)
     _dp   = _dot(30090);  _dv  = _dot(30200);  _dl  = _dot(30310)
@@ -332,7 +345,7 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
-    # URL param support (screenshot automation)
+    # URL param support
     _PAGE_MAP = {
         "dashboard": "🏠 Dashboard", "docker": "🐳 Docker",
         "kubernetes": "☸️ Kubernetes", "terraform": "🌍 Terraform",
@@ -347,49 +360,49 @@ with st.sidebar:
     if _qp and _qp in _PAGE_MAP:
         st.session_state["active_page"] = _PAGE_MAP[_qp]
 
-    # ── Navigation radio groups ───────────────────────────────────────────────
-    # Overview: index=0  →  Dashboard selected by default
-    # All others: index=None  →  nothing selected (unchecked) by default
+    # ── Radio groups — index=None on ALL so session state fully controls ─────
+    # On first load, session state sets nav_overview="🏠 Dashboard" (see init).
+    # _nav() clears all other groups → only one radio is ever checked at a time.
 
     _grp_header("Overview")
-    st.radio("Overview", ["🏠 Dashboard"], key="nav_overview", index=0,
+    st.radio("Overview", ["🏠 Dashboard"], key="nav_overview", index=None,
              label_visibility="collapsed", on_change=_nav, args=("nav_overview",))
 
     _grp_header("Infrastructure")
     st.radio("Infrastructure", ["🐳 Docker", "☸️ Kubernetes", "🌍 Terraform"],
-             key="nav_infra", index=None,
-             label_visibility="collapsed", on_change=_nav, args=("nav_infra",))
+             key="nav_infra", index=None, label_visibility="collapsed",
+             on_change=_nav, args=("nav_infra",))
 
     _grp_header("CI / CD")
     st.radio("CI/CD",
              [f"{_dj} ⚙️ Jenkins", f"{_ds} 🔍 SonarQube", f"{_da} 🔀 ArgoCD"],
-             key="nav_cicd", index=None,
-             label_visibility="collapsed", on_change=_nav, args=("nav_cicd",))
+             key="nav_cicd", index=None, label_visibility="collapsed",
+             on_change=_nav, args=("nav_cicd",))
 
     _grp_header("Security")
     st.radio("Security",
              [f"🔵 🛡️ Trivy Scanner", f"{_dv} 🔐 Vault Secrets"],
-             key="nav_sec", index=None,
-             label_visibility="collapsed", on_change=_nav, args=("nav_sec",))
+             key="nav_sec", index=None, label_visibility="collapsed",
+             on_change=_nav, args=("nav_sec",))
 
     _grp_header("Observability")
     st.radio("Observability",
              [f"{_dp} 📊 Prometheus & Grafana", f"{_dl} 📜 Loki Logs"],
-             key="nav_obs", index=None,
-             label_visibility="collapsed", on_change=_nav, args=("nav_obs",))
+             key="nav_obs", index=None, label_visibility="collapsed",
+             on_change=_nav, args=("nav_obs",))
 
     _grp_header("Deployment")
     st.radio("Deployment", ["🔵 ⛵ Helm Manager"],
-             key="nav_dep", index=None,
-             label_visibility="collapsed", on_change=_nav, args=("nav_dep",))
+             key="nav_dep", index=None, label_visibility="collapsed",
+             on_change=_nav, args=("nav_dep",))
 
     _grp_header("Storage & Registry")
     st.radio("Storage",
              [f"{_dreg} 📦 Container Registry",
               f"{_dm} 🗄️ MinIO Storage",
               f"{_dn} 🏛️ Nexus Repository"],
-             key="nav_stor", index=None,
-             label_visibility="collapsed", on_change=_nav, args=("nav_stor",))
+             key="nav_stor", index=None, label_visibility="collapsed",
+             on_change=_nav, args=("nav_stor",))
 
     active_page = st.session_state.get("active_page", "🏠 Dashboard")
 
