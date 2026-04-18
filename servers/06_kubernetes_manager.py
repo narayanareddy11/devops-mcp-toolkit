@@ -213,6 +213,21 @@ def top_pods(namespace: str = NS) -> str:
 
 
 @mcp.tool()
+def get_pod_restarts(namespace: str = NS) -> str:
+    """List pods with their restart counts — useful for spotting crash-looping containers."""
+    out = _kube(
+        "get pods -o jsonpath='{range .items[*]}{.metadata.name}{\"\\t\"}"
+        "{range .status.containerStatuses[*]}{.restartCount}{\"\\n\"}{end}{end}'",
+        namespace,
+    )
+    if not out["success"]:
+        return f"Error: {out['stderr']}"
+    lines = [l for l in out["stdout"].splitlines() if l.strip()]
+    result = [{"pod": p.split("\t")[0], "restarts": int(p.split("\t")[1])} for p in lines if "\t" in p]
+    return json.dumps(sorted(result, key=lambda x: x["restarts"], reverse=True), indent=2)
+
+
+@mcp.tool()
 def devops_stack_status() -> str:
     """Full status of the DevOps K8s stack: pods, services, PVCs, events."""
     pods = _kube("get pods -o wide", NS)

@@ -29,6 +29,15 @@ def _http_get(url: str, auth: tuple, timeout: int = 8) -> dict | None:
         return None
 
 
+def _retry_http_get(url: str, auth: tuple, retries: int = 3, timeout: int = 8) -> dict | None:
+    """HTTP GET with simple retry logic for transient failures."""
+    for attempt in range(retries):
+        result = _http_get(url, auth, timeout)
+        if result is not None:
+            return result
+    return None
+
+
 def _run(cmd: str) -> str:
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     return result.stdout.strip()
